@@ -27,7 +27,7 @@ func main() {
 	defer func() {
 		os.Stderr.Sync()
 		os.Stdout.Sync()
-		atexit()
+		runExitFuncs()
 	}()
 
 	flag.Parse()
@@ -43,7 +43,7 @@ func main() {
 			case <-sigch:
 				os.Stderr.Sync()
 				os.Stdout.Sync()
-				atexit()
+				runExitFuncs()
 				os.Stdout.Sync()
 				os.Stderr.Sync()
 			}
@@ -76,16 +76,20 @@ func run() {
 	}
 }
 
-func atexit() {
-	log.Printf("running atexit...\n")
+func atexit(f func()) {
+	exitFuncs = append(exitFuncs, f)
+}
+
+func runExitFuncs() {
+	log.Printf("running atexit-funcs...\n")
 	for _, f := range exitFuncs {
 		f()
 	}
-	log.Printf("running atexit... [done]\n")
+	log.Printf("running atexit-funcs... [done]\n")
 }
 
 func fatalf(format string, args ...interface{}) {
-	atexit()
+	runExitFuncs()
 	log.Fatalf(format, args...)
 }
 
@@ -94,7 +98,7 @@ func runCmd(cmd string, args ...string) error {
 	exe.Stdin = os.Stdin
 	exe.Stdout = os.Stdout
 	exe.Stderr = os.Stderr
-	exitFuncs = append(exitFuncs, func() {
+	atexit(func() {
 		killProc(exe)
 	})
 	return exe.Run()
@@ -163,7 +167,7 @@ func startCWrapper(errc chan error) {
 	//cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	exitFuncs = append(exitFuncs, func() {
+	atexit(func() {
 		killProc(cmd)
 	})
 
@@ -311,7 +315,7 @@ func runTestbench(errc chan error) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	exitFuncs = append(exitFuncs, func() {
+	atexit(func() {
 		killProc(cmd)
 	})
 
@@ -334,7 +338,7 @@ func runConsole(errc chan error) {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 
-	exitFuncs = append(exitFuncs, func() {
+	atexit(func() {
 		killProc(cmd)
 	})
 
@@ -357,7 +361,7 @@ func runJAS3(errc chan error) {
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
 
-	exitFuncs = append(exitFuncs, func() {
+	atexit(func() {
 		killProc(cmd)
 	})
 
