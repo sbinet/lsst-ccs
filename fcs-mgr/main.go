@@ -62,11 +62,11 @@ func run() {
 
 	errc := make(chan error)
 
-	startCWrapper(errc)
+	go startCWrapper(errc)
 	initProject()
 	makeDistrib()
 	setupEnv()
-	dispatch(errc)
+	go dispatch(errc)
 
 	select {
 	case err := <-errc:
@@ -173,13 +173,11 @@ func startCWrapper(errc chan error) {
 
 	log.Printf("c-wrapper command: %v\n", cmd.Args)
 
-	go func() {
-		err := cmd.Run()
-		if err != nil {
-			log.Printf("c-wrapper= %v\n", err)
-			errc <- err
-		}
-	}()
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("c-wrapper= %v\n", err)
+		errc <- err
+	}
 }
 
 func initProject() {
@@ -319,9 +317,7 @@ func runTestbench(errc chan error) {
 		killProc(cmd)
 	})
 
-	go func() {
-		errc <- cmd.Run()
-	}()
+	errc <- cmd.Run()
 }
 
 func runConsole(errc chan error) {
@@ -342,9 +338,7 @@ func runConsole(errc chan error) {
 		killProc(cmd)
 	})
 
-	go func() {
-		errc <- cmd.Run()
-	}()
+	errc <- cmd.Run()
 }
 
 func runJAS3(errc chan error) {
@@ -365,9 +359,7 @@ func runJAS3(errc chan error) {
 		killProc(cmd)
 	})
 
-	go func() {
-		errc <- cmd.Run()
-	}()
+	errc <- cmd.Run()
 }
 
 func unzip(dest, src string) error {
