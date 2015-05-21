@@ -11,11 +11,16 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
 var (
-	host = flag.String("host", "", "IP PC-104 will listen to")
+	haddr = flag.String("addr", "", "<ip>[:<port>] PC-104 will listen to")
+
+	host = ""
+	port = 50000
 
 	exitFuncs  = []func(){}
 	wdir       = "."
@@ -24,6 +29,8 @@ var (
 
 func main() {
 
+	var err error
+
 	defer func() {
 		os.Stderr.Sync()
 		os.Stdout.Sync()
@@ -31,8 +38,27 @@ func main() {
 	}()
 
 	flag.Parse()
-	if *host == "" {
-		*host = getHostIP()
+	switch *haddr {
+	case "":
+		host = getHostIP()
+	default:
+		slice := strings.Split(*haddr, ":")
+		switch len(slice) {
+		case 2:
+			host = slice[0]
+			port, err = strconv.Atoi(slice[1])
+			if err != nil {
+				fatalf("invalid port number: %s. (err=%v)\n", slice[1], err)
+			}
+		case 1:
+			host = slice[0]
+		default:
+			fatalf("invalid addr argument. got: %q\n", *haddr)
+		}
+
+		if host == "" {
+			host = getHostIP()
+		}
 	}
 
 	go func() {
@@ -153,13 +179,13 @@ func getHostIP() string {
 }
 
 func startCWrapper(errc chan error) {
-	log.Printf("Starting c-wrapper on PC-104... (listen for %q)\n", *host)
+	log.Printf("Starting c-wrapper on PC-104... (listen for %s:%d)\n", host, port)
 
 	cmd := exec.Command(
 		"ssh",
 		"-X",
 		"root@clrlsstemb01.in2p3.fr",
-		"startCWrapper --host="+*host,
+		"startCWrapper --host="+host,
 	)
 	cmd.Env = append(cmd.Env, "TERM=vt100")
 	//cmd.Stdin = os.Stdin
