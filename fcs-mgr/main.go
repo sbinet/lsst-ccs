@@ -2,6 +2,8 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
+	"bytes"
 	"encoding/xml"
 	"flag"
 	"io"
@@ -335,14 +337,52 @@ func runTestbench(errc chan error) {
 		"-D", os.Getenv("WORKDIR"),
 		"-D", os.Getenv("LOGFILENAME"),
 	)
+	f, err := os.Create("lpc.log.txt")
+	if err != nil {
+		log.Printf("could not create logfile: %v\n", err)
+		errc <- err
+		return
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		log.Printf("could not create pipe: %v\n", err)
+		errc <- err
+		return
+	}
+
+	atexit(func() {
+		pr.Sync()
+		pw.Sync()
+		f.Sync()
+
+		pr.Close()
+		pw.Close()
+		f.Close()
+	})
+
+	stdout := io.MultiWriter(pw, os.Stdout)
+	stderr := io.MultiWriter(pw, os.Stderr)
+
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	atexit(func() {
 		killProc(cmd)
 	})
 
+	go func() {
+		scan := bufio.NewScanner(pr)
+		hdr := []byte("::LPC:: ")
+		for scan.Scan() {
+			line := scan.Bytes()
+			if !bytes.HasPrefix(line, hdr) {
+				continue
+			}
+			f.Write(line[len(hdr):])
+			f.Write([]byte("\n"))
+		}
+	}()
 	errc <- cmd.Run()
 }
 
