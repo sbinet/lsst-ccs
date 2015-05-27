@@ -1,6 +1,6 @@
 ##
 ## lsst-ccs/fcs
-## A container with all dependencies for FCS are installed.
+## A container where all dependencies for FCS are installed.
 ##
 FROM lsst-ccs/base
 MAINTAINER Sebastien Binet "binet@cern.ch"

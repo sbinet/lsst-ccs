@@ -23,3 +23,7 @@ lsst> mvn clean && mvn install
 
 ie: one would mount the local development tree under `/opt/lsst`.
 
+One may also pass an additional `-v $HOME/.ssh:/root/.ssh` to get the proper
+ssh-keys available.
+
+
