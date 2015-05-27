@@ -1,0 +1,4 @@
+#!/bin/bash
+
+docker run -it -v `pwd`:/opt/lsst -v $HOME/.ssh:/root/.ssh lsst-ccs/fcs bash
+

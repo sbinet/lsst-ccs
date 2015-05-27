@@ -1,0 +1,4 @@
+<settings>
+	<localRepository>/opt/lsst/local-maven-repo/</localRepository>
+</settings>
+
