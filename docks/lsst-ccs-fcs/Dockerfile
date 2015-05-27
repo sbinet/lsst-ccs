@@ -17,6 +17,7 @@ RUN pacman -Syu --noconfirm && \
 
 ## install fcs deps 
 RUN pacman -S --noconfirm \
+	bash-completion \
 	jdk8-openjdk \
 	maven \
 	subversion \
