@@ -15,30 +15,6 @@ import (
 	"github.com/gonum/plot/vg"
 )
 
-type Data struct {
-	Acc    uint8 `json:"acc"`
-	Avg    uint8 `json:"avg"`
-	Offset int32 `json:"offset"`
-	Gain   int32 `json:"gain"` // FIXME: doc says int16
-	Raw    int16 `json:"raw"`
-	Value  int16 `json:"value"`
-}
-
-func (d *Data) UnmarshalJSON(data []byte) error {
-	r := bytes.NewReader(data[1 : len(data)-1])
-	_, err := fmt.Fscanf(
-		r,
-		"0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
-		&d.Acc, &d.Avg, &d.Offset, &d.Gain, &d.Raw, &d.Value,
-	)
-	return err
-}
-
-type XY struct {
-	X float64
-	Y float64
-}
-
 func main() {
 	fname := os.Args[1]
 	f, err := os.Open(fname)
@@ -57,40 +33,23 @@ func main() {
 		if bytes.HasPrefix(line, []byte("#")) {
 			continue
 		}
-		/*
-			// FIXME(sbinet): stdout and stderr are mixed up in fcs-mgr...
-			if !bytes.HasPrefix(line, []byte("0x3 0x4 0x5b0000 0xfdae")) {
-				continue
-			}
-		*/
+
 		r := bytes.NewReader(line)
 		data := make(map[string]Data)
 		err = json.NewDecoder(r).Decode(&data)
 		if err != nil {
 			log.Fatalf("error decoding line %q: %v\n", string(line), err)
 		}
-		/*
-			_, err = fmt.Fscanf(
-				r,
-				"0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
-				&data.Acc, &data.Avg, &data.Offset, &data.Gain,
-				&data.Raw, &data.Value,
-			)
-			if err != nil {
-				log.Printf("error while scanning line %q: %v\n", string(line), err)
-				continue
-			}
-		*/
 		raws = append(raws,
 			XY{
 				X: float64(i * 3), // data is snapshot every 3s
-				Y: float64(data["temp"].Raw)*0.3125e-3*10 - 20,
+				Y: adcToTemperature(data["temp"].Raw),
 			},
 		)
 		vals = append(vals,
 			XY{
 				X: float64(i * 3), // data is snapshot every 3s
-				Y: float64(data["temp"].Value)*0.3125e-3*10 - 20,
+				Y: adcToTemperature(data["temp"].Value),
 			},
 		)
 		i++
@@ -121,4 +80,36 @@ func main() {
 		log.Fatalf("error saving plot: %v\n", err)
 	}
 
+}
+
+type Data struct {
+	Acc    uint8 `json:"acc"`
+	Avg    uint8 `json:"avg"`
+	Offset int32 `json:"offset"`
+	Gain   int32 `json:"gain"` // FIXME: doc says int16
+	Raw    int16 `json:"raw"`
+	Value  int16 `json:"value"`
+}
+
+// UnmarshalJSON decodes a JSON representation of Data.
+// The official JSON format does not support hexadecimal literals.
+func (d *Data) UnmarshalJSON(data []byte) error {
+	r := bytes.NewReader(data[1 : len(data)-1])
+	_, err := fmt.Fscanf(
+		r,
+		"0x%x 0x%x 0x%x 0x%x 0x%x 0x%x",
+		&d.Acc, &d.Avg, &d.Offset, &d.Gain, &d.Raw, &d.Value,
+	)
+	return err
+}
+
+type XY struct {
+	X float64
+	Y float64
+}
+
+// adcToTemperature returns the temperature corresponding to a given ADC count.
+//  ADC: [0; 0xFFFF) -> -10.24V;10.24V -> -20C; 80C;
+func adcToTemperature(adc int16) float64 {
+	return float64(adc)*0.3125e-3*10.0 - 20.0
 }
