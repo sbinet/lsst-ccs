@@ -35,21 +35,21 @@ func main() {
 		}
 
 		r := bytes.NewReader(line)
-		data := make(map[string]Data)
-		err = json.NewDecoder(r).Decode(&data)
+		var evt Event
+		err = json.NewDecoder(r).Decode(&evt)
 		if err != nil {
 			log.Fatalf("error decoding line %q: %v\n", string(line), err)
 		}
 		raws = append(raws,
 			XY{
 				X: float64(i * 3), // data is snapshot every 3s
-				Y: adcToTemperature(data["temp"].Raw),
+				Y: adcToTemperature(evt.Temp.Raw),
 			},
 		)
 		vals = append(vals,
 			XY{
 				X: float64(i * 3), // data is snapshot every 3s
-				Y: adcToTemperature(data["temp"].Value),
+				Y: adcToTemperature(evt.Temp.Value),
 			},
 		)
 		i++
@@ -80,6 +80,12 @@ func main() {
 		log.Fatalf("error saving plot: %v\n", err)
 	}
 
+}
+
+type Event struct {
+	Temp       Data `json:"temp"`
+	Pressure   Data `json:"pressure"`
+	Hygrometry Data `json:"hygrometry"`
 }
 
 type Data struct {
