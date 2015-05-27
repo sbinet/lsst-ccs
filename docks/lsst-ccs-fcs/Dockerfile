@@ -19,6 +19,7 @@ RUN pacman -Syu --noconfirm && \
 RUN pacman -S --noconfirm \
 	jdk8-openjdk \
 	maven \
+	subversion \
 	which \
 	;
 
