@@ -83,13 +83,13 @@ func main() {
 		*/
 		raws = append(raws,
 			XY{
-				X: float64(i),
+				X: float64(i * 3), // data is snapshot every 3s
 				Y: float64(data["temp"].Raw)*0.3125e-3*10 - 20,
 			},
 		)
 		vals = append(vals,
 			XY{
-				X: float64(i),
+				X: float64(i * 3), // data is snapshot every 3s
 				Y: float64(data["temp"].Value)*0.3125e-3*10 - 20,
 			},
 		)
@@ -102,11 +102,14 @@ func main() {
 	}
 
 	p.Title.Text = "Temperatures"
-	p.X.Label.Text = "time"
-	p.Y.Label.Text = "Temperatures"
+	p.X.Label.Text = "Time (s)"
+	p.Y.Label.Text = "Temperature (C)"
+	p.Legend.Top = true
+
+	p.Add(plotter.NewGrid())
 
 	err = plotutil.AddLinePoints(p,
-		"0x6404 (raw)", raws,
+		//	"0x6404 (raw)", raws,
 		"0x6401 (val)", vals,
 	)
 	if err != nil {
