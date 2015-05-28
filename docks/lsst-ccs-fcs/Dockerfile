@@ -10,9 +10,9 @@ ENV USER root
 ENV HOME /root
 
 ## update
-RUN pacman -Syu --noconfirm && \
-	pacman-key --init && \
-	pacman-key --populate archlinux \
+RUN pacman-key --init && \
+	pacman-key --populate archlinux && \
+	pacman -Syu --noconfirm \
 	;
 
 ## install fcs deps 
