@@ -6,8 +6,8 @@ FROM lsst-ccs/base
 MAINTAINER Sebastien Binet "binet@cern.ch"
 
 USER root
-ENV USER root
-ENV HOME /root
+ENV GOPATH /go
+ENV PATH $GOPATH/bin:$PATH
 
 ## update
 RUN pacman-key --init && \
