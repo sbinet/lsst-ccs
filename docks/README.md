@@ -26,4 +26,12 @@ ie: one would mount the local development tree under `/opt/lsst`.
 One may also pass an additional `-v $HOME/.ssh:/root/.ssh` to make the proper
 ssh-keys available.
 
+### fcs-dev
+A helper command is provided to ease the configuration and launching of the `lsst-css/fcs` image.
 
+```sh
+> go build fcs-dev.go
+> ./fcs-dev --lsst=/path/to/lsst/sw
+lsst> mvn clean && mvn install
+lsst> fcs-mgr lpc
+```
