@@ -29,14 +29,20 @@ func main() {
 
 	subcmd := []string{
 		"run", "-it",
-		"-v", *lsst + ":/opt/lsst",
-		"-v", sshdir + ":/home/lsst/.ssh",
-		"-v", gopath + ":/go",
-		"-P",
 		"-p=50000:50000",
 		"--net=host",
-		"lsst-ccs/fcs",
+		"-v", *lsst + ":/opt/lsst",
 	}
+
+	if _, err := os.Stat(sshdir); err == nil {
+		subcmd = append(subcmd, "-v", sshdir+":/home/lsst/.ssh")
+	}
+	if _, err := os.Stat(gopath); err == nil && gopath != "" {
+		subcmd = append(subcmd, "-v", gopath+":/go")
+	}
+
+	subcmd = append(subcmd, "lsst-ccs/fcs")
+
 	switch flag.NArg() {
 	case 0:
 		subcmd = append(subcmd, "/bin/bash")
