@@ -25,8 +25,16 @@ RUN pacman -S --noconfirm \
 	which \
 	;
 
+## create lsst user
+RUN useradd -m -g users -G wheel -s /bin/bash lsst
+USER lsst
+ENV HOME /home/lsst
+
 ## modify maven local repository default location
-ADD maven-settings.xml /root/.m2/settings.xml
+ADD maven-settings.xml /home/lsst/.m2/settings.xml
+
+## CANOpen will need this port
+EXPOSE 50000
 
 WORKDIR /opt/lsst
 
