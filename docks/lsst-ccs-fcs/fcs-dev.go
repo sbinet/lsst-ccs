@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 )
@@ -27,9 +28,15 @@ func main() {
 	sshdir := filepath.Join(os.Getenv("HOME"), ".ssh")
 	gopath := strings.Split(os.Getenv("GOPATH"), ":")[0]
 
+	usr, err := user.Current()
+	if err != nil {
+		log.Fatalf("could not retrieve current user infos: %v\n", err)
+	}
+
 	subcmd := []string{
 		"run", "-it",
 		"-p=50000:50000",
+		"--user=" + usr.Uid + ":" + usr.Gid,
 		"--net=host",
 		"-v", *lsst + ":/opt/lsst",
 	}
@@ -55,7 +62,7 @@ func main() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatalf("error running docker: %v\n", err)
 	}
