@@ -1,3 +1,4 @@
+// fcs-run runs a command within the CCS environment.
 package main
 
 import (
