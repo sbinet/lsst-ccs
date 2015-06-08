@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"encoding/xml"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -185,7 +186,7 @@ func startCWrapper(errc chan error) {
 		"ssh",
 		"-X",
 		"root@clrlsstemb01.in2p3.fr",
-		"startCWrapper --host="+host,
+		"startCWrapper --host="+host, fmt.Sprintf("--port=%d", port),
 	)
 	cmd.Env = append(cmd.Env, "TERM=vt100")
 	//cmd.Stdin = os.Stdin
