@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var (
@@ -78,6 +79,7 @@ func main() {
 		}
 	}()
 
+	//go testNet()
 	run()
 }
 
@@ -470,4 +472,45 @@ func unzip(dest, src string) error {
 	}
 
 	return nil
+}
+
+func testNet() {
+	srv, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
+	if err != nil {
+		log.Fatalf("error listening: %v\n", err)
+	}
+
+	for {
+		conn, err := srv.Accept()
+		if err != nil {
+			log.Fatalf("error accept: %v\n", err)
+		}
+		go testForward(conn)
+	}
+}
+
+func testForward(conn net.Conn) {
+	time.Sleep(20 * time.Second)
+
+	cli, err := net.DialTimeout(
+		"tcp", "134.158.120.94:50000",
+		1000*time.Second,
+	)
+	if err != nil {
+		log.Fatalf("error dialing: %v\n", err)
+	}
+
+	fw, err := os.Create("sock-w.txt")
+	if err != nil {
+		log.Fatalf("error fw: %v\n", err)
+	}
+
+	w := io.MultiWriter(fw, cli)
+	go func() {
+		defer fw.Close()
+		io.Copy(w, conn)
+	}()
+
+	r := io.TeeReader(cli, fw)
+	go io.Copy(conn, r)
 }
