@@ -26,6 +26,7 @@ var (
 	exitFuncs  = []func(){}
 	wdir       = "."
 	fcsVersion = "dev-SNAPSHOT"
+	depEnvRoot = "./org-lsst-ccs-subsystem-fcs"
 )
 
 func main() {
@@ -86,6 +87,7 @@ func run() {
 	if err != nil {
 		fatalf("could not retrieve current work directory: %v\n", wdir)
 	}
+	depEnvRoot = filepath.Join(wdir, "org-lsst-ccs-subsystem-fcs")
 
 	errc := make(chan error)
 
@@ -208,7 +210,7 @@ func startCWrapper(errc chan error) {
 }
 
 func initProject() {
-	fname := filepath.Join(wdir, "pom.xml")
+	fname := filepath.Join(depEnvRoot, "pom.xml")
 	pom, err := os.Open(fname)
 	if err != nil {
 		fatalf("could not open [%s]: %v\n", fname, err)
@@ -231,7 +233,7 @@ func initProject() {
 }
 
 func makeDistrib() {
-	dist := filepath.Join(wdir, "DISTRIB")
+	dist := filepath.Join(depEnvRoot, "DISTRIB")
 	log.Printf("creating DISTRIB [%s]...\n", dist)
 	os.RemoveAll(dist)
 	err := os.MkdirAll(dist, 0755)
@@ -240,7 +242,7 @@ func makeDistrib() {
 	}
 
 	for _, d := range []string{"main", "gui"} {
-		dir := filepath.Join(wdir, d)
+		dir := filepath.Join(depEnvRoot, d)
 		_, err = os.Stat(dir)
 		if err != nil {
 			fatalf("could not stat [%s]: %v\n", dir, err)
@@ -281,10 +283,10 @@ func setupEnv() {
 		{"P4", "org.lsst.ccs.bus.level=INFO"},
 		{"P5", "org.lsst.ccs.subsystems.fcs.level=ALL"},
 
-		{"TEST_ENV_ROOT", filepath.Join(wdir, "DISTRIB")},
+		{"TEST_ENV_ROOT", filepath.Join(depEnvRoot, "DISTRIB")},
 		{"TEST_ENV_BIN", filepath.Join("${TEST_ENV_ROOT}", "bin")},
 		{"TEST_ENV_RESOURCES", filepath.Join("${TEST_ENV_ROOT}", "externalResources")},
-		{"TEST_ENV_DIRVERS", filepath.Join("${TEST_ENV_ROOT}", "drivers")},
+		{"TEST_ENV_DRIVERS", filepath.Join("${TEST_ENV_ROOT}", "drivers")},
 
 		// needed by CCSbootstrap.sh
 		{"CCS_RESOURCE_PATH", "${TEST_ENV_RESOURCES}"},
@@ -312,6 +314,8 @@ func dispatch(errc chan error) {
 		runConsole(errc)
 	case "jas3":
 		runJAS3(errc)
+	case "list":
+		runListApps(errc)
 	default:
 		fatalf("unknown command [%s]\n", flag.Arg(0))
 	}
@@ -377,6 +381,27 @@ func runJAS3(errc chan error) {
 			"CCSbootstrap.sh",
 		),
 		"-app", "CCS-Console",
+	)
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	atexit(func() {
+		killProc(cmd)
+	})
+
+	errc <- cmd.Run()
+}
+
+func runListApps(errc chan error) {
+	cmd := exec.Command(
+		filepath.Join(
+			os.Getenv("TEST_ENV_ROOT"),
+			"org-lsst-ccs-subsystem-fcs-main-"+fcsVersion,
+			"bin",
+			"CCSbootstrap.sh",
+		),
+		"-la",
 	)
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
