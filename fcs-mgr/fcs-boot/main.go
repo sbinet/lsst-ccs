@@ -13,6 +13,7 @@ import (
 
 var (
 	lsst = flag.String("lsst", "", "path to LSST FCS code tree (default=$PWD)")
+	tty  = flag.Bool("tty", true, "require a TTY")
 )
 
 func main() {
@@ -34,7 +35,7 @@ func main() {
 	}
 
 	subcmd := []string{
-		"run", "-it",
+		"run", "-t",
 		"-p=50000:50000",
 		"--user=" + usr.Uid + ":" + usr.Gid,
 		"--net=host",
@@ -46,6 +47,10 @@ func main() {
 	}
 	if _, err := os.Stat(gopath); err == nil && gopath != "" {
 		subcmd = append(subcmd, "-v", gopath+":/go")
+	}
+
+	if *tty {
+		subcmd = append(subcmd, "-i")
 	}
 
 	subcmd = append(subcmd, "lsst-ccs/fcs")
