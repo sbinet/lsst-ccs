@@ -43,6 +43,8 @@ func dispatch(cmd string, args []string) error {
 		return cmdUpdate(args)
 	case "dist":
 		return cmdDist(args)
+	case "run":
+		return cmdRun(args)
 	default:
 		return fmt.Errorf("unknown command %q\n", cmd)
 	}
