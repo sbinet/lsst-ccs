@@ -91,20 +91,17 @@ func cmdInit(args []string) error {
 	// for each sub-repo, import from svn (to git) if not already done.
 	for _, repo := range repos {
 		go func(repo string) {
-			f, err := os.Create("log-" + repo + ".txt")
-			if err != nil {
-				errc <- err
-				return
-			}
-			defer f.Close()
 			rdir := filepath.Join(dir, repo)
 			_, err = os.Stat(rdir)
 			if err != nil {
-				initRepo(rdir, errc)
+				err = initRepo(rdir)
+				if err != nil {
+					errc <- err
+					return
+				}
 			}
 
-			updateRepo(rdir, errc)
-			buildRepo(rdir, errc)
+			errc <- updateRepo(rdir)
 		}(repo)
 	}
 
@@ -120,7 +117,10 @@ func cmdInit(args []string) error {
 
 func cmdBuild(args []string) error {
 	if len(args) > 0 {
-		return fmt.Errorf("invalid number of arguments. got %d. want 0")
+		return fmt.Errorf(
+			"invalid number of arguments. got %d. want 0",
+			len(args),
+		)
 	}
 
 	dir, err := os.Getwd()
@@ -137,7 +137,10 @@ func cmdBuild(args []string) error {
 			return err
 		}
 
-		go buildRepo(rdir, errc)
+		go func(rdir string) {
+			errc <- buildRepo(rdir)
+		}(rdir)
+
 	}
 
 	for range repos {
@@ -152,7 +155,10 @@ func cmdBuild(args []string) error {
 
 func cmdUpdate(args []string) error {
 	if len(args) > 0 {
-		return fmt.Errorf("invalid number of arguments. got %d. want 0")
+		return fmt.Errorf(
+			"invalid number of arguments. got %d. want 0",
+			len(args),
+		)
 	}
 
 	dir, err := os.Getwd()
@@ -169,7 +175,9 @@ func cmdUpdate(args []string) error {
 			return err
 		}
 
-		go updateRepo(rdir, errc)
+		go func(rdir string) {
+			errc <- updateRepo(rdir)
+		}(rdir)
 	}
 
 	for range repos {
@@ -182,14 +190,13 @@ func cmdUpdate(args []string) error {
 	return err
 }
 
-func initRepo(rdir string, errc chan error) {
+func initRepo(rdir string) error {
 	repo := filepath.Base(rdir)
 	log.Printf("init repo [%s]...\n", repo)
 
 	f, err := os.Create("log-" + repo + ".txt")
 	if err != nil {
-		errc <- err
-		return
+		return err
 	}
 	defer f.Close()
 
@@ -201,58 +208,55 @@ func initRepo(rdir string, errc chan error) {
 		svnRoot+"/"+repo,
 		repo,
 	)
-	// cmd.Stdin = os.Stdin
+	//cmd.Stdin = os.Stdin
 	cmd.Stdout = f
 	cmd.Stderr = f
 
 	err = cmd.Run()
 	if err != nil {
-		errc <- err
-		return
+		return err
 	}
-	errc <- nil
+	return nil
 }
 
-func updateRepo(rdir string, errc chan error) {
+func updateRepo(rdir string) error {
 	repo := filepath.Base(rdir)
 	log.Printf("updating repo [%s]...\n", repo)
 
 	f, err := os.Create("log-" + repo + ".txt")
 	if err != nil {
-		errc <- err
-		return
+		return err
 	}
 	defer f.Close()
 
 	cmd := exec.Command("git", "svn", "fetch")
 	cmd.Dir = rdir
-	// cmd.Stdin = os.Stdin
+	//cmd.Stdin = os.Stdin
 	cmd.Stdout = f
 	cmd.Stderr = f
 
 	err = cmd.Run()
 	if err != nil {
-		errc <- err
-		return
+		log.Printf("updating repo [%s]... [err=%v]\n", repo, err)
+		return err
 	}
 
-	errc <- nil
+	return nil
 }
 
-func buildRepo(rdir string, errc chan error) {
+func buildRepo(rdir string) error {
 	repo := filepath.Base(rdir)
 	log.Printf("building repo [%s]...\n", repo)
 
 	f, err := os.Create("log-" + repo + ".txt")
 	if err != nil {
-		errc <- err
-		return
+		return err
 	}
 	defer f.Close()
 
-	cmd := exec.Command("fcs-boot", "-lsst="+rdir, "mvn", "clean", "install")
-	cmd.Dir = rdir
-	cmd.Stdin = os.Stdin
+	cmd := exec.Command("fcs-boot", "-tty=false", "-lsst="+rdir, "mvn", "clean", "install")
+	//cmd.Dir = rdir
+	//cmd.Stdin = f
 	cmd.Stdout = f
 	cmd.Stderr = f
 
@@ -266,9 +270,8 @@ func buildRepo(rdir string, errc chan error) {
 			err,
 			delta,
 		)
-		errc <- err
-		return
+		return err
 	}
 	log.Printf("building repo [%s]... [ok] (time=%v)\n", repo, delta)
-	errc <- nil
+	return nil
 }
