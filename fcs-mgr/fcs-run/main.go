@@ -28,7 +28,7 @@ var (
 	exitFuncs  = []func(){}
 	wdir       = "."
 	fcsVersion = "dev-SNAPSHOT"
-	depEnvRoot = "./org-lsst-ccs-subsystem-fcs"
+	dbVersion  = "dev-SNAPSHOT"
 )
 
 func main() {
@@ -90,13 +90,12 @@ func run() {
 	if err != nil {
 		fatalf("could not retrieve current work directory: %v\n", wdir)
 	}
-	depEnvRoot = filepath.Join(wdir, "org-lsst-ccs-subsystem-fcs")
 
 	errc := make(chan error)
 
 	go startCWrapper(errc)
 	initProject()
-	makeDistrib()
+	//makeDistrib()
 	setupEnv()
 	go dispatch(errc)
 
@@ -213,71 +212,47 @@ func startCWrapper(errc chan error) {
 }
 
 func initProject() {
-	fname := filepath.Join(depEnvRoot, "pom.xml")
-	pom, err := os.Open(fname)
-	if err != nil {
-		fatalf("could not open [%s]: %v\n", fname, err)
-	}
-	defer pom.Close()
+	for _, proj := range []struct {
+		Dir     string
+		Version *string
+	}{
+		{
+			Dir:     "org-lsst-ccs-subsystem-fcs",
+			Version: &fcsVersion,
+		},
+		{
+			Dir:     "org-lsst-ccs-localdb",
+			Version: &dbVersion,
+		},
+	} {
 
-	type POM struct {
-		XMLName xml.Name `xml:"project"`
-		Name    string   `xml:"name"`
-		Version string   `xml:"version"`
-	}
-	var data POM
-	err = xml.NewDecoder(pom).Decode(&data)
-	if err != nil {
-		fatalf("error decoding pom.xml: %v\n", err)
-	}
-
-	log.Printf("pom-data: %#v\n", data)
-	fcsVersion = data.Version
-}
-
-func makeDistrib() {
-	dist := filepath.Join(depEnvRoot, "DISTRIB")
-	log.Printf("creating DISTRIB [%s]...\n", dist)
-	os.RemoveAll(dist)
-	err := os.MkdirAll(dist, 0755)
-	if err != nil {
-		fatalf("error creating [%s]: %v\n", dist, err)
-	}
-
-	for _, d := range []string{"main", "gui"} {
-		dir := filepath.Join(depEnvRoot, d)
-		_, err = os.Stat(dir)
+		fname := filepath.Join(wdir, proj.Dir, "pom.xml")
+		pom, err := os.Open(fname)
 		if err != nil {
-			fatalf("could not stat [%s]: %v\n", dir, err)
+			fatalf("could not open [%s]: %v\n", fname, err)
+		}
+		defer pom.Close()
+
+		type POM struct {
+			XMLName xml.Name `xml:"project"`
+			Name    string   `xml:"name"`
+			Version string   `xml:"version"`
+		}
+		var data POM
+		err = xml.NewDecoder(pom).Decode(&data)
+		if err != nil {
+			fatalf("error decoding pom.xml: %v\n", err)
 		}
 
-		srcs, err := filepath.Glob(
-			filepath.Join(dir, "target", "org-lsst-ccs-subsystem-fcs-"+d+"-*-dist.zip"),
-		)
-		if err != nil {
-			fatalf("could not stat %s-*-dist.zip: %v\n", d, err)
-		}
-		switch len(srcs) {
-		case 0:
-			fatalf("no %s-*-dist.zip!", d)
-		case 1:
-			// ok
-		default:
-			fatalf("too many %s-*-dist.zip files (%d): %v\n", len(srcs), srcs)
-		}
-
-		err = unzip(dist, srcs[0])
-		if err != nil {
-			fatalf("could not unzip [%s] into [%s]: %v\n", srcs[0], dist, err)
-		}
+		log.Printf("pom-data: %#v\n", data)
+		*proj.Version = data.Version
 	}
-	log.Printf("creating DISTRIB [%s]... [done]\n", dist)
 }
 
 func setupEnv() {
 	for _, v := range [][2]string{
 		{"FCS_VERSION", fcsVersion},
-		{"LOCALDB_VERSION", "1.3.0-SNAPSHOT"},
+		{"LOCALDB_VERSION", dbVersion},
 		// logging
 		{"P0", "org.lsst.ccs.utilities.logging.ConsoleHandlerN.level=ALL"},
 		{"P1", "org.lsst.ccs.utilities.logging.FileHandlerN.formatter=org.lsst.ccs.utilities.logging.TextFormatter"},
@@ -286,7 +261,7 @@ func setupEnv() {
 		{"P4", "org.lsst.ccs.bus.level=INFO"},
 		{"P5", "org.lsst.ccs.subsystems.fcs.level=ALL"},
 
-		{"TEST_ENV_ROOT", filepath.Join(depEnvRoot, "DISTRIB")},
+		{"TEST_ENV_ROOT", filepath.Join(wdir, "DISTRIB")},
 		{"TEST_ENV_BIN", filepath.Join("${TEST_ENV_ROOT}", "bin")},
 		{"TEST_ENV_RESOURCES", filepath.Join("${TEST_ENV_ROOT}", "externalResources")},
 		{"TEST_ENV_DRIVERS", filepath.Join("${TEST_ENV_ROOT}", "drivers")},
@@ -302,7 +277,7 @@ func setupEnv() {
 		{"WORKDIR", filepath.Join(wdir, "work")},
 		{"LOGFILENAME", "org.lsst.ccs.utilites.logging.FileHandlerN.pattern=%W/logs/ccs-logs-%A-testbenchLPC.log"},
 	} {
-		err := os.Setenv(v[0], v[1])
+		err := os.Setenv(v[0], os.ExpandEnv(v[1]))
 		if err != nil {
 			fatalf("error calling os.Setenv(%q, %q): %v\n", v[0], v[1], err)
 		}
@@ -319,6 +294,12 @@ func dispatch(errc chan error) {
 		runJAS3(errc)
 	case "list":
 		runListApps(errc)
+	case "infos":
+		runInfos(errc)
+	case "start-localdb":
+		startLocalDB(errc)
+	case "shell":
+		runShell(errc)
 	default:
 		fatalf("unknown command [%s]\n", flag.Arg(0))
 	}
@@ -406,6 +387,68 @@ func runListApps(errc chan error) {
 		),
 		"-la",
 	)
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	atexit(func() {
+		killProc(cmd)
+	})
+
+	errc <- cmd.Run()
+}
+
+func startLocalDB(errc chan error) {
+	cmd := exec.Command(
+		filepath.Join(
+			os.Getenv("TEST_ENV_ROOT"),
+			"org-lsst-ccs-localdb-main-"+dbVersion,
+			"bin",
+			"CCSbootstrap.sh",
+		),
+		"-app", "TrendingIngestModule",
+		"-D",
+		"org.lsst.ccs.localdb.hibernate.properties.file="+filepath.Join(
+			os.Getenv("TEST_ENV_ROOT"),
+			"org-lsst-ccs-subsystem-fcs-main-"+fcsVersion,
+			"etc",
+			"statusPersister.properties",
+		),
+	)
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	atexit(func() {
+		killProc(cmd)
+	})
+
+	errc <- cmd.Run()
+}
+
+func runInfos(errc chan error) {
+	cmd := exec.Command(
+		filepath.Join(
+			os.Getenv("TEST_ENV_ROOT"),
+			"org-lsst-ccs-subsystem-fcs-main-"+fcsVersion,
+			"bin",
+			"CCSbootstrap.sh",
+		),
+		"-distInfo",
+	)
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	atexit(func() {
+		killProc(cmd)
+	})
+
+	errc <- cmd.Run()
+}
+
+func runShell(errc chan error) {
+	cmd := exec.Command("/bin/bash")
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
