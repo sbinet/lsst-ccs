@@ -58,8 +58,6 @@ func buildRepo(rdir string) error {
 	defer f.Close()
 
 	cmd := exec.Command("fcs-boot", "-tty=false", "-lsst="+rdir, "mvn", "clean", "install")
-	//cmd.Dir = rdir
-	//cmd.Stdin = f
 	cmd.Stdout = f
 	cmd.Stderr = f
 
