@@ -21,6 +21,7 @@ RUN pacman -S --noconfirm \
 	jdk8-openjdk \
 	maven \
 	openssh \
+	sed \
 	subversion \
 	which \
 	;
