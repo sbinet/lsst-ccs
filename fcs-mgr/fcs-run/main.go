@@ -93,7 +93,6 @@ func run() {
 
 	errc := make(chan error)
 
-	go startCWrapper(errc)
 	initProject()
 	//makeDistrib()
 	setupEnv()
@@ -285,6 +284,10 @@ func setupEnv() {
 }
 
 func dispatch(errc chan error) {
+	if flag.Arg(0) != "start-localdb" {
+		go startCWrapper(errc)
+	}
+
 	switch flag.Arg(0) {
 	case "lpc":
 		runTestbench(errc)
