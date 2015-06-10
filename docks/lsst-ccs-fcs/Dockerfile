@@ -20,6 +20,7 @@ RUN pacman -S --noconfirm \
 	bash-completion \
 	jdk8-openjdk \
 	maven \
+	mysql \
 	openssh \
 	sed \
 	subversion \
