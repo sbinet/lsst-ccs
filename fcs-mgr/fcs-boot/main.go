@@ -39,6 +39,7 @@ func main() {
 		"-p=50000:50000",
 		"--user=" + usr.Uid + ":" + usr.Gid,
 		"--net=host",
+		"--volumes-from=ccs-mysql",
 		"-v", *lsst + ":/opt/lsst",
 	}
 
