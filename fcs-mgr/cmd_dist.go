@@ -99,6 +99,7 @@ func makeDistRepo(dist, rdir string) error {
 			return err
 		}
 	}
+	log.Printf("creating distribution for repo [%s]... [done]\n", repo)
 	return err
 }
 
