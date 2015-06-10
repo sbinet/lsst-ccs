@@ -13,7 +13,7 @@ func cmdRun(args []string) error {
 
 	subargs := []string{"-lsst=" + dir, "fcs-run"}
 	if len(args) <= 0 {
-		subargs = append(subargs, "bash")
+		subargs = append(subargs, "shell")
 	} else {
 		subargs = append(subargs, args...)
 	}
