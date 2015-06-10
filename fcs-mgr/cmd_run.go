@@ -18,12 +18,6 @@ func cmdRun(args []string) error {
 		subargs = append(subargs, args...)
 	}
 
-	// make sure the distrib is up-to-date
-	err = cmdDist(nil)
-	if err != nil {
-		return err
-	}
-
 	cmd := exec.Command(
 		"fcs-boot",
 		subargs...,
