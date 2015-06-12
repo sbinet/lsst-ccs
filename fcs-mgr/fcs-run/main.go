@@ -284,7 +284,10 @@ func setupEnv() {
 }
 
 func dispatch(errc chan error) {
-	if flag.Arg(0) != "start-localdb" {
+	switch flag.Arg(0) {
+	case "start-localdb", "jas3":
+		// ok
+	default:
 		go startCWrapper(errc)
 	}
 
