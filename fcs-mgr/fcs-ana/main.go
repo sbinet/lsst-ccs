@@ -23,8 +23,14 @@ func main() {
 	}
 	defer f.Close()
 
-	raws := make(plotter.XYs, 0, 1024)
-	vals := make(plotter.XYs, 0, 1024)
+	raws := make(map[string]plotter.XYs, 3)
+	vals := make(map[string]plotter.XYs, 3)
+
+	keys := []string{"temp", "press", "hygro"}
+	for _, k := range keys {
+		raws[k] = make(plotter.XYs, 0, 1024)
+		vals[k] = make(plotter.XYs, 0, 1024)
+	}
 
 	i := 0
 	scan := bufio.NewScanner(f)
@@ -40,46 +46,71 @@ func main() {
 		if err != nil {
 			log.Fatalf("error decoding line %q: %v\n", string(line), err)
 		}
-		raws = append(raws,
+		raws["temp"] = append(raws["temp"],
 			XY{
 				X: float64(i * 3), // data is snapshot every 3s
 				Y: adcToTemperature(evt.Temp.Raw),
 			},
 		)
-		vals = append(vals,
+		vals["temp"] = append(vals["temp"],
 			XY{
 				X: float64(i * 3), // data is snapshot every 3s
 				Y: adcToTemperature(evt.Temp.Value),
 			},
 		)
+		raws["press"] = append(raws["press"],
+			XY{
+				X: float64(i * 3), // data is snapshot every 3s
+				Y: adcToPressure(evt.Pressure.Raw),
+			},
+		)
+		vals["press"] = append(vals["press"],
+			XY{
+				X: float64(i * 3), // data is snapshot every 3s
+				Y: adcToPressure(evt.Pressure.Value),
+			},
+		)
+		raws["hygro"] = append(raws["hygro"],
+			XY{
+				X: float64(i * 3), // data is snapshot every 3s
+				Y: adcToHygrometry(evt.Hygrometry.Raw),
+			},
+		)
+		vals["hygro"] = append(vals["hygro"],
+			XY{
+				X: float64(i * 3), // data is snapshot every 3s
+				Y: adcToHygrometry(evt.Hygrometry.Value),
+			},
+		)
 		i++
 	}
 
-	p, err := plot.New()
-	if err != nil {
-		panic(err)
+	for _, k := range keys {
+		p, err := plot.New()
+		if err != nil {
+			panic(err)
+		}
+
+		p.Title.Text = k // "Temperatures"
+		p.X.Label.Text = "Time (s)"
+		p.Y.Label.Text = k // "Temperature (C)"
+		p.Legend.Top = true
+
+		p.Add(plotter.NewGrid())
+
+		err = plotutil.AddLinePoints(p,
+			//	"0x6404 (raw)", raws,
+			"0x6401 (val)", vals[k],
+		)
+		if err != nil {
+			log.Fatalf("error adding line-points: %v\n", err)
+		}
+
+		// Save the plot to a PNG file.
+		if err := p.Save(14*vg.Inch, 8*vg.Inch, "data-"+k+".png"); err != nil {
+			log.Fatalf("error saving plot: %v\n", err)
+		}
 	}
-
-	p.Title.Text = "Temperatures"
-	p.X.Label.Text = "Time (s)"
-	p.Y.Label.Text = "Temperature (C)"
-	p.Legend.Top = true
-
-	p.Add(plotter.NewGrid())
-
-	err = plotutil.AddLinePoints(p,
-		//	"0x6404 (raw)", raws,
-		"0x6401 (val)", vals,
-	)
-	if err != nil {
-		log.Fatalf("error adding line-points: %v\n", err)
-	}
-
-	// Save the plot to a PNG file.
-	if err := p.Save(14*vg.Inch, 8*vg.Inch, "data.png"); err != nil {
-		log.Fatalf("error saving plot: %v\n", err)
-	}
-
 }
 
 type Event struct {
@@ -118,4 +149,16 @@ type XY struct {
 //  ADC: [0; 0xFFFF) -> -10.24V;10.24V -> -20C; 80C;
 func adcToTemperature(adc int16) float64 {
 	return float64(adc)*0.3125e-3*10.0 - 20.0
+}
+
+// adcToPressure returns the pressure corresponding to a given ADC count.
+//  ADC: [0; 0xFFFF) -> -10.24V;10.24V -> 600mbar; 1100mbar;
+func adcToPressure(adc int16) float64 {
+	return float64(adc)*0.3125e-3*2 + 600.0
+}
+
+// adcToHygrometry returns the hygrometry corresponding to a given ADC count.
+//  ADC: [0; 0xFFFF) -> -10.24V;10.24V -> 0%; 100%;
+func adcToHygrometry(adc int16) float64 {
+	return float64(adc) * 0.3125e-3 * 10.0
 }
