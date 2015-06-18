@@ -10,7 +10,7 @@ import (
 
 // Timestamp represents a time stamp that may be null.
 // Timestamp implements the sql.Scanner interface so it can be used as a Scan
-// desctination.
+// destination.
 type Timestamp struct {
 	Valid bool
 	Time  time.Time
@@ -37,7 +37,9 @@ func (ts Timestamp) Value() (driver.Value, error) {
 	return ts.Time, nil
 }
 
-// Duration represents a time duration
+// Duration represents a time duration that may be null.
+// Duration implements the sql.Scanner interface so it can be used as a Scan
+// destination.
 type Duration struct {
 	Valid    bool
 	Duration time.Duration
