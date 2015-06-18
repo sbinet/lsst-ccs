@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -28,6 +29,11 @@ func main() {
 	err = db.Ping()
 	if err != nil {
 		log.Fatalf("error pinging db: %v\n", err)
+	}
+
+	descr, err := loadDataDesc(db)
+	if err != nil {
+		log.Fatalf("error loading rawdata descriptions: %v\n", err)
 	}
 
 	stmt, err := db.Prepare("select * from rawdata where id > 4680000 order by id and descr_id")
@@ -58,14 +64,52 @@ func main() {
 		if data.String.Valid {
 			v = data.String.String
 		}
+		dataDesc := descr[data.DescrID]
+		name := "???"
+		if dataDesc.Name.Valid {
+			name = strings.Replace(dataDesc.Name.String, "testbenchLPC/", "", -1)
+		}
 
 		fmt.Printf(
-			"%d \"%v\" descr=%d value=%v\n",
+			"%d \"%v\" %-15s = %v\n",
 			data.ID,
 			data.TStamp.Time,
-			data.DescrID,
+			name,
 			v,
 		)
 	}
 
+}
+
+func loadDataDesc(db *sql.DB) (map[int64]DataDesc, error) {
+	stmt, err := db.Prepare("select * from datadesc order by id")
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := stmt.Query()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	descr := make(map[int64]DataDesc)
+	for rows.Next() {
+		var data DataDesc
+		err = rows.Scan(
+			&data.ID,
+			&data.Type,
+			&data.MaxSampling,
+			&data.Name,
+			&data.PDelay,
+			&data.SrcName,
+			&data.SrcSubSystem,
+		)
+		if err != nil {
+			return nil, err
+		}
+		descr[data.ID] = data
+	}
+
+	return descr, nil
 }

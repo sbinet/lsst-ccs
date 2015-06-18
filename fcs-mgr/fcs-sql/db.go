@@ -37,6 +37,30 @@ func (ts Timestamp) Value() (driver.Value, error) {
 	return ts.Time, nil
 }
 
+// Duration represents a time duration
+type Duration struct {
+	Valid    bool
+	Duration time.Duration
+}
+
+func (d *Duration) Scan(value interface{}) error {
+	if value == nil {
+		d.Duration, d.Valid = time.Duration(0), false
+		return nil
+	}
+	d.Valid = true
+	rv := reflect.ValueOf(value)
+	if !rv.Type().ConvertibleTo(reflect.TypeOf(int64(0))) {
+		return fmt.Errorf("%T is not convertible to int64", value)
+	}
+	d.Duration = time.Duration(rv.Int()) * time.Millisecond
+	return nil
+}
+
+func (d Duration) Value() (driver.Value, error) {
+	return d.Duration, nil
+}
+
 // +-------------------+--------------+------+-----+---------+----------------+
 // | Field             | Type         | Null | Key | Default | Extra          |
 // +-------------------+--------------+------+-----+---------+----------------+
@@ -51,9 +75,9 @@ func (ts Timestamp) Value() (driver.Value, error) {
 type DataDesc struct {
 	ID           int64
 	Type         sql.NullString
-	MaxSampling  time.Duration
+	MaxSampling  Duration
 	Name         sql.NullString
-	PDelay       time.Duration
+	PDelay       Duration
 	SrcName      sql.NullString
 	SrcSubSystem sql.NullString
 }
@@ -125,7 +149,7 @@ type StatData struct {
 // +-------------------+------------+------+-----+---------+----------------+
 type StatDesc struct {
 	ID           int64
-	PDelay       time.Duration
-	TimeBinWidth time.Duration
+	PDelay       Duration
+	TimeBinWidth Duration
 	RawID        sql.NullInt64
 }
