@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"html/template"
 	"log"
 	"strings"
 
@@ -13,16 +14,29 @@ import (
 var (
 	user = flag.String("user", "", "db user name")
 	pass = flag.String("password", "", "db user password")
+
+	page = Page{
+		Title: "FCS",
+		db:    nil,
+		Tmpl:  template.Must(template.New("fcs").Parse(displayTmpl)),
+	}
 )
 
 func main() {
 
 	flag.Parse()
+
+	errc := make(chan error)
+	go func() {
+		errc <- startServer()
+	}()
+
 	conn := *user + ":" + *pass + "@/ccs"
 	db, err := sql.Open("mysql", conn)
 	if err != nil {
 		log.Fatalf("error opening db connection: %v\n", err)
 	}
+	page.db = db
 	defer db.Close()
 
 	// Open doesn't open a connection. Validate DSN data:
@@ -79,6 +93,10 @@ func main() {
 		)
 	}
 
+	err = <-errc
+	if err != nil {
+		log.Fatalf("error server: %v\n", err)
+	}
 }
 
 func loadDataDesc(db *sql.DB) (map[int64]DataDesc, error) {
