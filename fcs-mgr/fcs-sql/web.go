@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -10,6 +12,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"golang.org/x/net/websocket"
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -19,22 +23,45 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	page.mu.Lock()
 	defer page.mu.Unlock()
 
-	err := page.load()
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	//	err := page.load()
+	//	if err != nil {
+	//		http.Error(w, err.Error(), 500)
+	//		return
+	//	}
 
-	err = page.write(w)
+	err := page.write(w)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 }
 
+func dataHandler(ws *websocket.Conn) {
+	buf := new(bytes.Buffer)
+	for data := range datac {
+		buf.Reset()
+		// fmt.Printf("Sending to client: %#v\n", data)
+
+		err := json.NewEncoder(buf).Encode(data)
+		if err != nil {
+			log.Printf("error encoding data: %v\n", err)
+			continue
+		}
+
+		err = websocket.Message.Send(ws, string(buf.Bytes()))
+		if err != nil {
+			log.Printf("Can't send: %v\n", err)
+			break
+		}
+		//	fmt.Printf("---[temp]: %v\n", string(buf.Bytes()))
+	}
+}
+
 func startServer() error {
 	http.HandleFunc("/", handler)
-	const addr = "localhost:8080"
+	http.Handle("/data", websocket.Handler(dataHandler))
+
+	const addr = ":8080"
 	log.Printf("starting server on [%s]...\n", addr)
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
@@ -44,11 +71,18 @@ func startServer() error {
 	return err
 }
 
-//type Point [2]float64
-
 type Point struct {
 	X time.Time
 	Y float64
+}
+
+func (p Point) MarshalJSON() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	err := json.NewEncoder(buf).Encode([2]interface{}{
+		p.X.Unix() * 1000, // javascript's time expects data in milliseconds
+		p.Y,
+	})
+	return buf.Bytes(), err
 }
 
 type Points []Point
@@ -64,7 +98,8 @@ type Page struct {
 	db    *sql.DB
 	Tmpl  *template.Template
 	mu    sync.RWMutex
-	id    int64 // last id
+	id    int64              // last id
+	descr map[int64]DataDesc // descr-id -> description
 
 	Temperature Points
 	Pressure    Points
@@ -79,17 +114,27 @@ func (p *Page) load() error {
 	//p.Pressure = p.Pressure[:p.id]
 	//p.Hygrometry = p.Hygrometry[:p.id]
 
+	if len(p.descr) == 0 {
+		descr, err := loadDataDesc(p.db)
+		if err != nil {
+			return err
+		}
+		p.descr = descr
+	}
+
 	stmt, err := p.db.Prepare("select * from rawdata where id > ? order by (id and descr_id)")
 	if err != nil {
 		return err
 	}
 
+	fmt.Printf("... query...\n")
 	rows, err := stmt.Query(p.id)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
+	fmt.Printf("... row-range...\n")
 	for rows.Next() {
 		var data RawData
 		err = rows.Scan(
@@ -101,8 +146,14 @@ func (p *Page) load() error {
 			return err
 		}
 
-		switch data.DescrID {
-		case 68:
+		name := ""
+		descr := p.descr[data.DescrID]
+		if descr.Name.Valid {
+			name = descr.Name.String
+		}
+
+		switch name {
+		case "testbenchLPC/temperature":
 			p.Temperature = append(
 				p.Temperature,
 				Point{
@@ -111,7 +162,7 @@ func (p *Page) load() error {
 				},
 			)
 
-		case 69:
+		case "testbenchLPC/hygrometry":
 			p.Hygrometry = append(
 				p.Hygrometry,
 				Point{
@@ -120,7 +171,7 @@ func (p *Page) load() error {
 				},
 			)
 
-		case 70:
+		case "testbenchLPC/pressure":
 			p.Pressure = append(
 				p.Pressure,
 				Point{
@@ -140,6 +191,17 @@ func (p *Page) load() error {
 	delta := time.Since(start)
 	fmt.Printf("... loading db data ...[done] (%v)\n", delta)
 
+	datac <- map[string]interface{}{
+		"temperature": p.Temperature,
+		"pressure":    p.Pressure,
+		"hygrometry":  p.Hygrometry,
+	}
+
+	if *verbose {
+		fmt.Printf("temp:  %v C\n", p.Temperature[len(p.Temperature)-1].Y)
+		fmt.Printf("hygro: %v %%\n", p.Hygrometry[len(p.Hygrometry)-1].Y)
+		fmt.Printf("press: %v mbar\n", p.Pressure[len(p.Pressure)-1].Y)
+	}
 	return err
 }
 

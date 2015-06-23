@@ -11,20 +11,23 @@ const (
 <script src="//cdnjs.cloudflare.com/ajax/libs/flot/0.8.2/jquery.flot.time.min.js"></script>
 <script src="//cdnjs.cloudflare.com/ajax/libs/flot/0.8.2/jquery.flot.selection.min.js"></script>
 <script type="text/javascript">
+	var sock = null;
+	var wsuri = "ws://127.0.0.1:8080/data";
 	var data = [
 	        { label: "temperature", 
-			  data: [{{range $point := .Temperature}}[{{$point.X.Unix}}*1000,{{$point.Y}}],{{end}}],
+			  data: [],
 			  yaxis: 1
 		    },
 	        { label: "pressure", 
-			  data: [{{range $point := .Pressure}}[{{$point.X.Unix}}*1000,{{$point.Y}}],{{end}}],
+			  data: [],
 		      yaxis: 2
 		    },
 	        { label: "hygrometry", 
-			  data: [{{range $point := .Hygrometry}}[{{$point.X.Unix}}*1000,{{$point.Y}}],{{end}}],
+			  data: [],
 			  yaxis: 3
 		    },
 	];
+
 	var options = {
 		legend: {
 			position: "nw",
@@ -40,6 +43,111 @@ const (
 			mode: "x"
 		},
 	};
+
+	var overviewOpts = {
+		legend: { show: false},
+		series: {
+			lines: {
+				show: true,
+				lineWidth: 1
+			},
+			shadowSize: 0
+		},
+		xaxis: {
+			ticks: [],
+			mode: "time"
+		},
+		/*
+		yaxis: {
+			ticks: [],
+			min: 0,
+			autoscaleMargin: 0.1
+		},
+		*/
+		selection: {
+			mode: "x"
+		}
+	};
+
+	var plotRange = {
+		min: 0,
+		max: 0,
+	};
+
+	var plot = null;
+	var overview = null;
+
+	function update_display() {
+		plot = $.plot("#placeholder", data, options);
+		overview = $.plot("#overview", data, overviewOpts);
+		// now connect the two
+		$("#placeholder").bind("plotselected", function (event, ranges) {
+			plotRange.min = ranges.xaxis.from;
+			plotRange.max = ranges.xaxis.to;
+			// do the zooming
+			$.each(plot.getXAxes(), function(_, axis) {
+				var opts = axis.options;
+				opts.min = plotRange.min;
+				opts.max = plotRange.max;
+			});
+			plot.setupGrid();
+			plot.draw();
+			plot.clearSelection();
+			// don't fire event on the overview to prevent eternal loop
+			overview.setSelection(ranges, true);
+		});
+
+		$("#overview").bind("plotselected", function (event, ranges) {
+			plotRange.min = ranges.xaxis.from;
+			plotRange.max = ranges.xaxis.to;
+			plot.setSelection(ranges);
+		});
+		if (plotRange.min < plotRange.max) {
+			console.log("==> zoom... ["+plotRange.min+", "+plotRange.max+"]");
+			
+			var ranges = {
+				xaxis: {
+					from: plotRange.min,
+					to: plotRange.max
+				}
+			};
+			
+			// do the zooming
+			$.each(plot.getXAxes(), function(_, axis) {
+				var opts = axis.options;
+				opts.min = plotRange.min;
+				opts.max = plotRange.max;
+			});
+			
+			plot.setSelection(ranges);
+			//overview.setSelection(ranges, true);
+			
+		}
+	};
+
+	window.onload = function() {
+
+            console.log("onload");
+
+            sock = new WebSocket(wsuri);
+
+            sock.onopen = function() {
+                console.log("connected to " + wsuri);
+            }
+
+            sock.onclose = function(e) {
+                console.log("connection closed (" + e.code + ")");
+            }
+
+             sock.onmessage = function(e) {
+				var obj = JSON.parse(e.data);
+				data[0]["data"] = obj["temperature"];
+				data[1]["data"] = obj["pressure"];
+				data[2]["data"] = obj["hygrometry"];
+				update_display();
+         }
+    };
+
 
 	/*
 	// hard-code color indices to prevent them from shifting as
@@ -92,53 +200,8 @@ const (
 		$("#footer").prepend("Flot " + $.plot.version + " &ndash; ");
 	*/
 
-	$(document).ready(function() {
-	var plot = $.plot("#placeholder", data, options);
-	var overview = $.plot("#overview", data, {
-		legend: { show: false},
-		series: {
-			lines: {
-				show: true,
-				lineWidth: 1
-			},
-			shadowSize: 0
-		},
-		xaxis: {
-			ticks: [],
-			mode: "time"
-		},
-		yaxis: [{
-			ticks: [],
-			min: 0,
-			autoscaleMargin: 0.1
-		},
-		{
-			autoscaleMargin: 0.1,
-			position: "left"
-		}
-		],
-		selection: {
-			mode: "x"
-		}
-	});
-	// now connect the two
-	$("#placeholder").bind("plotselected", function (event, ranges) {
-		// do the zooming
-		$.each(plot.getXAxes(), function(_, axis) {
-			var opts = axis.options;
-			opts.min = ranges.xaxis.from;
-			opts.max = ranges.xaxis.to;
-		});
-		plot.setupGrid();
-		plot.draw();
-		plot.clearSelection();
-		// don't fire event on the overview to prevent eternal loop
-		overview.setSelection(ranges, true);
-	});
-	$("#overview").bind("plotselected", function (event, ranges) {
-		plot.setSelection(ranges);
-	});
-	});
+	$(document).ready(update_display);
+
 </script>
 <style>
 #content {

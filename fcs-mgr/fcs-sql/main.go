@@ -7,19 +7,23 @@ import (
 	"html/template"
 	"log"
 	"strings"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
 
 var (
-	user = flag.String("user", "", "db user name")
-	pass = flag.String("password", "", "db user password")
+	user    = flag.String("user", "", "db user name")
+	pass    = flag.String("password", "", "db user password")
+	verbose = flag.Bool("v", false, "enable verbose mode")
 
 	page = Page{
 		Title: "FCS",
 		db:    nil,
 		Tmpl:  template.Must(template.New("fcs").Parse(displayTmpl)),
+		descr: make(map[int64]DataDesc),
 	}
+	datac = make(chan map[string]interface{})
 )
 
 func main() {
@@ -31,6 +35,7 @@ func main() {
 		errc <- startServer()
 	}()
 
+	log.Printf("connect to mysql db...\n")
 	conn := *user + ":" + *pass + "@/ccs"
 	db, err := sql.Open("mysql", conn)
 	if err != nil {
@@ -39,18 +44,41 @@ func main() {
 	page.db = db
 	defer db.Close()
 
+	log.Printf("ping mysql db...\n")
 	// Open doesn't open a connection. Validate DSN data:
 	err = db.Ping()
 	if err != nil {
 		log.Fatalf("error pinging db: %v\n", err)
 	}
 
+	log.Printf("load data-desc table...\n")
 	descr, err := loadDataDesc(db)
 	if err != nil {
 		log.Fatalf("error loading rawdata descriptions: %v\n", err)
 	}
 
-	stmt, err := db.Prepare("select * from rawdata where id > 4680000 order by id and descr_id")
+	go func() {
+		go func() {
+			log.Printf("--> start ticking...\n")
+			tick := time.Tick(5 * time.Second)
+			for range tick {
+				err := page.load()
+				if err != nil {
+					errc <- err
+					return
+				}
+			}
+		}()
+
+		log.Printf("--> first page-load...\n")
+		err := page.load()
+		if err != nil {
+			errc <- err
+			return
+		}
+	}()
+
+	stmt, err := db.Prepare("select * from rawdata order by id and descr_id")
 	if err != nil {
 		log.Fatalf("error preparing stmt: %v\n", err)
 	}
@@ -84,13 +112,15 @@ func main() {
 			name = strings.Replace(dataDesc.Name.String, "testbenchLPC/", "", -1)
 		}
 
-		fmt.Printf(
-			"%d \"%v\" %-15s = %v\n",
-			data.ID,
-			data.TStamp.Time,
-			name,
-			v,
-		)
+		if *verbose {
+			fmt.Printf(
+				"%d \"%v\" %-15s = %v\n",
+				data.ID,
+				data.TStamp.Time,
+				name,
+				v,
+			)
+		}
 	}
 
 	err = <-errc
