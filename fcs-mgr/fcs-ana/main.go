@@ -154,7 +154,7 @@ func adcToTemperature(adc int16) float64 {
 // adcToPressure returns the pressure corresponding to a given ADC count.
 //  ADC: [0; 0xFFFF) -> -10.24V;10.24V -> 600mbar; 1100mbar;
 func adcToPressure(adc int16) float64 {
-	return float64(adc)*0.3125e-3*2 + 600.0
+	return float64(adc)*0.3125e-3*50.0 + 600.0
 }
 
 // adcToHygrometry returns the hygrometry corresponding to a given ADC count.
