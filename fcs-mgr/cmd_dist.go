@@ -5,9 +5,20 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+)
+
+var (
+	dbInfo = struct {
+		User string
+		Pass string
+	}{
+		User: "user",
+		Pass: "s3cr37",
+	}
 )
 
 func cmdDist(args []string) error {
@@ -48,6 +59,45 @@ func cmdDist(args []string) error {
 	for range repos {
 		err = <-errc
 		if err != nil {
+			return err
+		}
+	}
+
+	extdir := filepath.Join(dist, "externalResources")
+	err = os.MkdirAll(extdir, 0755)
+	if err != nil {
+		log.Printf("error creating [%s] directory: %v\n", extdir, err)
+		return err
+	}
+
+	for _, v := range []struct {
+		Name string
+		Data []byte
+	}{
+		{
+			Name: filepath.Join(extdir, "statusPersister.properties"),
+			Data: []byte(fmt.Sprintf(
+				`hibernate.connection.url=jdbc:mysql://localhost:3306/ccs
+hibernate.connection.driver_class=com.mysql.jdbc.Driver
+hibernate.dialect=org.hibernate.dialect.MySQLDialect
+hibernate.connection.username=%s
+hibernate.connection.password=%s
+`,
+				dbInfo.User,
+				dbInfo.Pass,
+			)),
+		},
+		{
+			Name: filepath.Join(extdir, "ccsGlobal.properties"),
+			Data: []byte(fmt.Sprintf(
+				"org.lsst.ccs.localdb.additional.classpath.entry=%s\n",
+				"/opt/lsst/DISTRIB/drivers/mysql-connector-java-5.1.15.jar",
+			)),
+		},
+	} {
+		err = ioutil.WriteFile(v.Name, v.Data, 0644)
+		if err != nil {
+			log.Fatalf("error writing file [%s]: %v\n", v.Name, err)
 			return err
 		}
 	}
