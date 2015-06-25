@@ -11,7 +11,7 @@ func cmdRun(args []string) error {
 		return err
 	}
 
-	subargs := []string{"-lsst=" + dir, "fcs-run"}
+	subargs := []string{"-mysql", "-lsst=" + dir, "fcs-run"}
 	if len(args) <= 0 {
 		subargs = append(subargs, "shell")
 	} else {
