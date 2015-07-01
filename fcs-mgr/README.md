@@ -86,13 +86,14 @@ sh> fcs-mgr dist
 
 sh> ll DISTRIB/
 total 0
-drwxr-xr-x 1 binet binet 22 Jun  9 17:41 org-lsst-ccs-localdb-config-1.4.1-SNAPSHOT
-drwxr-xr-x 1 binet binet 22 Jun  9 17:41 org-lsst-ccs-localdb-jar-1.4.1-SNAPSHOT
-drwxr-xr-x 1 binet binet 22 Jun  9 17:41 org-lsst-ccs-localdb-main-1.4.1-SNAPSHOT
-drwxr-xr-x 1 binet binet 22 Jun  9 17:41 org-lsst-ccs-localdb-war-1.4.1-SNAPSHOT
-drwxr-xr-x 1 binet binet 22 Jun  9 17:41 org-lsst-ccs-subsystem-fcs-buses-1.6.2-SNAPSHOT
-drwxr-xr-x 1 binet binet 22 Jun  9 17:41 org-lsst-ccs-subsystem-fcs-gui-1.6.2-SNAPSHOT
-drwxr-xr-x 1 binet binet 22 Jun  9 17:41 org-lsst-ccs-subsystem-fcs-main-1.6.2-SNAPSHOT
+drwxr-xr-x 1 binet binet 92 Jun 26 15:41 externalResources
+drwxr-xr-x 1 binet binet 22 Jun 26 15:40 org-lsst-ccs-localdb-config-1.3.2
+drwxr-xr-x 1 binet binet 22 Jun 26 15:40 org-lsst-ccs-localdb-jar-1.3.2
+drwxr-xr-x 1 binet binet 22 Jun 26 15:40 org-lsst-ccs-localdb-main-1.3.2
+drwxr-xr-x 1 binet binet 22 Jun 26 15:40 org-lsst-ccs-localdb-war-1.3.2
+drwxr-xr-x 1 binet binet 22 Jun 26 15:40 org-lsst-ccs-subsystem-fcs-buses-1.6.2-SNAPSHOT
+drwxr-xr-x 1 binet binet 22 Jun 26 15:40 org-lsst-ccs-subsystem-fcs-gui-1.6.2-SNAPSHOT
+drwxr-xr-x 1 binet binet 22 Jun 26 15:40 org-lsst-ccs-subsystem-fcs-main-1.6.2-SNAPSHOT
 ```
 
 ### `fcs-mgr run`
