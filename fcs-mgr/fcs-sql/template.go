@@ -12,7 +12,7 @@ const (
 <script src="//cdnjs.cloudflare.com/ajax/libs/flot/0.8.2/jquery.flot.selection.min.js"></script>
 <script type="text/javascript">
 	var sock = null;
-	var wsuri = "ws://127.0.0.1:8080/data";
+	var wsuri = "{{.URI}}";
 	var data = [
 	        { label: "temperature", 
 			  data: [],

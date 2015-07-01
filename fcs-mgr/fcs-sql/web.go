@@ -61,8 +61,9 @@ func startServer() error {
 	http.HandleFunc("/", handler)
 	http.Handle("/data", websocket.Handler(dataHandler))
 
-	const addr = ":8080"
+	const addr = "127.0.0.1:8080"
 	log.Printf("starting server on [%s]...\n", addr)
+	page.URI = "ws://" + addr + "/data"
 	err := http.ListenAndServe(addr, nil)
 	if err != nil {
 		log.Printf("error server: %v\n", err)
@@ -95,6 +96,7 @@ func (p Points) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 
 type Page struct {
 	Title string
+	URI   string
 	db    *sql.DB
 	Tmpl  *template.Template
 	mu    sync.RWMutex
