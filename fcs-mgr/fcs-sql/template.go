@@ -39,6 +39,9 @@ const (
 			timezone: "browser",
 			timeformat: "%Y/%m/%d\n%H:%M:%S"
 		},
+		yaxis: {
+			position: "right",
+		},
 		selection: {
 			mode: "x"
 		},
@@ -56,6 +59,9 @@ const (
 		xaxis: {
 			ticks: [],
 			mode: "time"
+		},
+		yaxis: {
+			position: "right",
 		},
 		/*
 		yaxis: {
