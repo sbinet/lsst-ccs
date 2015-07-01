@@ -39,6 +39,8 @@ func dispatch(cmd string, args []string) error {
 		return cmdInit(args)
 	case "build":
 		return cmdBuild(args)
+	case "localdb":
+		return cmdLocalDB(args)
 	case "update":
 		return cmdUpdate(args)
 	case "dist":
