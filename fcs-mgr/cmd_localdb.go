@@ -10,6 +10,11 @@ import (
 	"time"
 )
 
+const (
+	dkrMysql   = "ccs-mysql"
+	dkrLocaldb = "ccs-localdb"
+)
+
 type DockerContainer struct {
 	Id    string
 	State struct {
@@ -51,63 +56,20 @@ func cmdLocalDB(args []string) error {
 func cmdLocalDBCreate(args []string) error {
 	var err error
 
-	// is the container already running? created?
-	docker, err := dockerContainer("ccs-mysql")
-	if err == nil {
-
-		// container 'ccs-mysql' exists.
-		// restart it if needed or do nothing (if already running)
-
-		status := docker.State
-		switch {
-		case status.Running:
-			log.Printf("ccs-mysql container already running\n")
-			return nil
-
-		case status.Restarting:
-			log.Printf("ccs-mysql container is restarting... (retry later)\n")
-			return nil
-
-		case status.Paused:
-			log.Printf("ccs-mysql container paused. re-starting\n")
-			cmd := exec.Command("docker", "restart", docker.Id)
-			cmd.Stdin = os.Stdin
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			err = cmd.Run()
-			return err
-
-		case status.OOMKilled:
-			log.Printf("ccs-mysql container killed (OOM)\n")
-			return fmt.Errorf("localdb container killed (OOM)")
-
-		case status.Dead:
-			log.Printf("ccs-mysql container is dead\n")
-			return fmt.Errorf("localdb container is dead")
-
-		default:
-			log.Printf("ccs-mysql container in UNKNOWN state:\n%v\n", docker)
-			return fmt.Errorf("localdb container in UNKNOWN state")
-		}
-
-		log.Printf(">>> data=%#v\n", status)
-	}
-	if err != nil && docker.Id != "N/A" {
-		return err
-	}
-
 	pwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
+	// try to create the ccs-mysql container.
+	// if it already exists, docker should tell us.
 	cmd := exec.Command(
 		"docker", "run", "--detach",
 		"--env", "MYSQL_ROOT_PASSWORD="+dbInfo.RootPass,
 		"--env", "MYSQL_USER="+dbInfo.User,
 		"--env", "MYSQL_PASSWORD="+dbInfo.Pass,
 		"--env", "MYSQL_DATABASE=ccs",
-		"--name", "ccs-mysql",
+		"--name", dkrMysql,
 		"--publish", "3306:3306",
 		"--volume", pwd+"/mysql:/var/lib/mysql",
 		"lsst-ccs/mysql",
@@ -122,20 +84,20 @@ func cmdLocalDBCreate(args []string) error {
 func cmdLocalDBStart(args []string) error {
 	var err error
 	// make sure 'ccs-mysql' is running
-	mysql, err := dockerContainer("ccs-mysql")
+	mysql, err := dockerContainer(dkrMysql)
 	if err != nil {
 		if mysql.Id == "N/A" {
-			log.Printf("ccs-mysql container is NOT RUNNING.\n")
+			log.Printf("%s container is NOT RUNNING.\n", dkrMysql)
 			log.Printf("please run 'fcs-mgr localdb create' first\n")
-			return fmt.Errorf("ccs-mysql container is NOT RUNNING")
+			return fmt.Errorf("%s container is NOT RUNNING", dkrMysql)
 		}
 		return err
 	}
 
 	if !mysql.State.Running {
-		log.Printf("ccs-mysql container is NOT RUNNING: %#v\n", mysql)
+		log.Printf("%s container is NOT RUNNING: %#v\n", dkrMysql, mysql)
 		log.Printf("please run 'fcs-mgr localdb create' first\n")
-		return fmt.Errorf("ccs-mysql container is NOT RUNNING")
+		return fmt.Errorf("%s container is NOT RUNNING", dkrMysql)
 	}
 
 	dir, err := os.Getwd()
@@ -146,7 +108,7 @@ func cmdLocalDBStart(args []string) error {
 	cmd := exec.Command(
 		"fcs-boot",
 		"-mysql", "-lsst="+dir, "-detach",
-		"-name=ccs-localdb",
+		"-name="+dkrLocaldb,
 		"fcs-run",
 		"start-localdb",
 	)
@@ -161,14 +123,14 @@ func cmdLocalDBStop(args []string) error {
 	var err error
 
 	// make sure 'ccs-localdb' is running
-	localdb, err := dockerContainer("ccs-localdb")
+	localdb, err := dockerContainer(dkrLocaldb)
 	if err != nil {
 		return err
 	}
 
 	if !localdb.State.Running {
-		log.Printf("ccs-localdb container is NOT RUNNING: %#v\n", localdb)
-		return fmt.Errorf("ccs-localdb container is NOT RUNNING")
+		log.Printf("%s container is NOT RUNNING: %#v\n", dkrLocaldb, localdb)
+		return fmt.Errorf("%s container is NOT RUNNING", dkrLocaldb)
 	}
 
 	run := func(cmd string, args ...string) error {
@@ -181,35 +143,35 @@ func cmdLocalDBStop(args []string) error {
 
 	err = run("docker", "stop", localdb.Id)
 	if err != nil {
-		log.Printf("could not stop ccs-localdb container: %v\n", err)
+		log.Printf("could not stop %s container: %v\n", dkrLocaldb, err)
 		return err
 	}
 
 	err = run("docker", "rm", localdb.Id)
 	if err != nil {
-		log.Printf("could not remove ccs-localdb container: %v\n", err)
+		log.Printf("could not remove %s container: %v\n", dkrLocaldb, err)
 		return err
 	}
 
-	mysql, err := dockerContainer("ccs-mysql")
+	mysql, err := dockerContainer(dkrMysql)
 	if err != nil {
 		return err
 	}
 
 	if !mysql.State.Running {
-		log.Printf("ccs-mysql container is NOT RUNNING: %#v\n", mysql)
-		return fmt.Errorf("ccs-mysql container is NOT RUNNING")
+		log.Printf("%s container is NOT RUNNING: %#v\n", dkrMysql, mysql)
+		return fmt.Errorf("%s container is NOT RUNNING", dkrMysql)
 	}
 
 	err = run("docker", "stop", mysql.Id)
 	if err != nil {
-		log.Printf("could not stop ccs-mysql container: %v\n", err)
+		log.Printf("could not stop %s container: %v\n", dkrMysql, err)
 		return err
 	}
 
 	err = run("docker", "rm", mysql.Id)
 	if err != nil {
-		log.Printf("could not remove ccs-mysql container: %v\n", err)
+		log.Printf("could not remove %s container: %v\n", dkrMysql, err)
 		return err
 	}
 
