@@ -12,9 +12,11 @@ import (
 )
 
 var (
-	lsst  = flag.String("lsst", "", "path to LSST FCS code tree (default=$PWD)")
-	tty   = flag.Bool("tty", true, "require a TTY")
-	mysql = flag.Bool("mysql", false, "connect to ccs-mysql container")
+	lsst   = flag.String("lsst", "", "path to LSST FCS code tree (default=$PWD)")
+	tty    = flag.Bool("tty", true, "require a TTY")
+	mysql  = flag.Bool("mysql", false, "connect to ccs-mysql container")
+	detach = flag.Bool("detach", false, "run container in background (daemonize)")
+	name   = flag.String("name", "", "container name")
 )
 
 func main() {
@@ -45,6 +47,16 @@ func main() {
 
 	if *mysql {
 		subcmd = append(subcmd, "--volumes-from=ccs-mysql")
+	}
+
+	if *detach {
+		subcmd = append(subcmd, "--detach")
+	} else {
+		subcmd = append(subcmd, "--rm")
+	}
+
+	if *name != "" {
+		subcmd = append(subcmd, "--name", *name)
 	}
 
 	if _, err := os.Stat(sshdir); err == nil {
