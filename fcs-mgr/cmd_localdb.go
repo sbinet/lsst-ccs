@@ -122,17 +122,6 @@ func cmdLocalDBStart(args []string) error {
 func cmdLocalDBStop(args []string) error {
 	var err error
 
-	// make sure 'ccs-localdb' is running
-	localdb, err := dockerContainer(dkrLocaldb)
-	if err != nil {
-		return err
-	}
-
-	if !localdb.State.Running {
-		log.Printf("%s container is NOT RUNNING: %#v\n", dkrLocaldb, localdb)
-		return fmt.Errorf("%s container is NOT RUNNING", dkrLocaldb)
-	}
-
 	run := func(cmd string, args ...string) error {
 		exe := exec.Command(cmd, args...)
 		exe.Stdin = os.Stdin
@@ -141,38 +130,25 @@ func cmdLocalDBStop(args []string) error {
 		return exe.Run()
 	}
 
-	err = run("docker", "stop", localdb.Id)
-	if err != nil {
-		log.Printf("could not stop %s container: %v\n", dkrLocaldb, err)
-		return err
-	}
+	for _, name := range []string{dkrLocaldb, dkrMysql} {
+		container, err := dockerContainer(name)
+		if err != nil {
+			log.Printf("error retrieving status of container %s: %v\n", name,
+				err)
+			return err
+		}
 
-	err = run("docker", "rm", localdb.Id)
-	if err != nil {
-		log.Printf("could not remove %s container: %v\n", dkrLocaldb, err)
-		return err
-	}
+		err = run("docker", "stop", container.Id)
+		if err != nil {
+			log.Printf("could not stop %s container: %v\n", name, err)
+			return err
+		}
 
-	mysql, err := dockerContainer(dkrMysql)
-	if err != nil {
-		return err
-	}
-
-	if !mysql.State.Running {
-		log.Printf("%s container is NOT RUNNING: %#v\n", dkrMysql, mysql)
-		return fmt.Errorf("%s container is NOT RUNNING", dkrMysql)
-	}
-
-	err = run("docker", "stop", mysql.Id)
-	if err != nil {
-		log.Printf("could not stop %s container: %v\n", dkrMysql, err)
-		return err
-	}
-
-	err = run("docker", "rm", mysql.Id)
-	if err != nil {
-		log.Printf("could not remove %s container: %v\n", dkrMysql, err)
-		return err
+		err = run("docker", "rm", container.Id)
+		if err != nil {
+			log.Printf("could not remove %s container: %v\n", name, err)
+			return err
+		}
 	}
 
 	return err
