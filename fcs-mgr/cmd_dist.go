@@ -13,11 +13,13 @@ import (
 
 var (
 	dbInfo = struct {
-		User string
-		Pass string
+		User     string
+		Pass     string
+		RootPass string
 	}{
-		User: "user",
-		Pass: "s3cr37",
+		User:     "user",
+		Pass:     "s3cr37",
+		RootPass: "sup3r-s3cr37",
 	}
 )
 
