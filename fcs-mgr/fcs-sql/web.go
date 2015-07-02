@@ -128,6 +128,7 @@ func (p *Page) load() error {
 	if err != nil {
 		return err
 	}
+	defer stmt.Close()
 
 	fmt.Printf("... query...\n")
 	rows, err := stmt.Query(p.id)
