@@ -12,6 +12,24 @@ sh> go get github.com/sbinet/lsst-ccs/...
 
 ## Usage
 
+Usage of `fcs-mgr` can be inferred from `fcs-mgr help`.
+
+```sh
+sh> fcs-mgr help
+fcs-mgr - 
+
+Commands:
+
+    build       build the code in a FCS/CCS workarea
+    dist        build a binary distribution kit
+    init        initialize a new FCS/CCS workarea
+    localdb     commands for the FCS/CCS localdb application
+    run         run a command inside a CCS container
+    update      update FCS/CCS workarea source code
+
+Use "fcs-mgr help <command>" for more information about a command.
+```
+
 ### `fcs-mgr init`
 `fcs-mgr init` creates a new workspace for `CCS` and the `FCS` subsystem.
 
