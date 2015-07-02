@@ -7,9 +7,28 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/gonuts/commander"
+	"github.com/gonuts/flag"
 )
 
-func cmdBuild(args []string) error {
+func fcsMakeCmdBuild() *commander.Command {
+	cmd := &commander.Command{
+		Run:       cmdBuild,
+		UsageLine: "build",
+		Short:     "build the code in a FCS/CCS workarea",
+		Long: `
+build builds the code in a FCS/CCS workarea.
+
+ex:
+ $ fcs-mgr build
+`,
+		Flag: *flag.NewFlagSet("fcs-mgr-build", flag.ExitOnError),
+	}
+	return cmd
+}
+
+func cmdBuild(cmdr *commander.Command, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf(
 			"invalid number of arguments. got %d. want 0",

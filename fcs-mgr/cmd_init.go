@@ -6,9 +6,30 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/gonuts/commander"
+	"github.com/gonuts/flag"
 )
 
-func cmdInit(args []string) error {
+func fcsMakeCmdInit() *commander.Command {
+	cmd := &commander.Command{
+		Run:       cmdInit,
+		UsageLine: "init [<path>]",
+		Short:     "initialize a new FCS/CCS workarea",
+		Long: `
+init initialize a new FCS/CCS workarea.
+
+ex:
+ $ fcs-mgr init
+ $ fcs-mgr init .
+ $ fcs-mgr init some/dir
+`,
+		Flag: *flag.NewFlagSet("fcs-mgr-init", flag.ExitOnError),
+	}
+	return cmd
+}
+
+func cmdInit(cmdr *commander.Command, args []string) error {
 	var err error
 	dir := "."
 	switch len(args) {

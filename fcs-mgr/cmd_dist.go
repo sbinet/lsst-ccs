@@ -9,6 +9,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/gonuts/commander"
+	"github.com/gonuts/flag"
 )
 
 var (
@@ -23,7 +26,23 @@ var (
 	}
 )
 
-func cmdDist(args []string) error {
+func fcsMakeCmdDist() *commander.Command {
+	cmd := &commander.Command{
+		Run:       cmdDist,
+		UsageLine: "dist",
+		Short:     "build a binary distribution kit",
+		Long: `
+dist builds a binary distribution kit.
+
+ex:
+ $ fcs-mgr dist
+`,
+		Flag: *flag.NewFlagSet("fcs-mgr-dist", flag.ExitOnError),
+	}
+	return cmd
+}
+
+func cmdDist(cmdr *commander.Command, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf(
 			"invalid number of arguments. got %d. want 0",

@@ -8,7 +8,79 @@ import (
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/gonuts/commander"
+	"github.com/gonuts/flag"
 )
+
+func fcsMakeCmdLocalDB() *commander.Command {
+	// all the localdb subcommands will need to use docker somehow
+	// make sure it is accessible
+	_, err := exec.LookPath("docker")
+	if err != nil {
+		log.Fatalf("could not locate 'docker' command: %v\n", err)
+	}
+
+	cmd := &commander.Command{
+		UsageLine: "localdb [options]",
+		Short:     "commands for the FCS/CCS localdb application",
+		Subcommands: []*commander.Command{
+			fcsMakeCmdLocalDBCreate(),
+			fcsMakeCmdLocalDBStart(),
+			fcsMakeCmdLocalDBStop(),
+		},
+		Flag: *flag.NewFlagSet("fcs-mgr-localdb", flag.ExitOnError),
+	}
+	return cmd
+}
+
+func fcsMakeCmdLocalDBCreate() *commander.Command {
+	cmd := &commander.Command{
+		Run:       cmdLocalDBCreate,
+		UsageLine: "create",
+		Short:     "create a new mysqldb container",
+		Long: `
+create creates a new mysqldb docker container and launches it.
+
+ex:
+ $ fcs-mgr localdb create
+`,
+		Flag: *flag.NewFlagSet("fcs-mgr-localdb-create", flag.ExitOnError),
+	}
+	return cmd
+}
+
+func fcsMakeCmdLocalDBStart() *commander.Command {
+	cmd := &commander.Command{
+		Run:       cmdLocalDBStart,
+		UsageLine: "start",
+		Short:     "start a new trending localdb application",
+		Long: `
+start starts a new trending localdb CCS/FCS application.
+
+ex:
+ $ fcs-mgr localdb start
+`,
+		Flag: *flag.NewFlagSet("fcs-mgr-localdb-start", flag.ExitOnError),
+	}
+	return cmd
+}
+
+func fcsMakeCmdLocalDBStop() *commander.Command {
+	cmd := &commander.Command{
+		Run:       cmdLocalDBStop,
+		UsageLine: "stop",
+		Short:     "stop the localdb and mysqldb containers",
+		Long: `
+stop stops the localdb application and shuts down the mysqldb container.
+
+ex:
+ $ fcs-mgr localdb stop
+`,
+		Flag: *flag.NewFlagSet("fcs-mgr-localdb-stop", flag.ExitOnError),
+	}
+	return cmd
+}
 
 const (
 	dkrMysql   = "ccs-mysql"
@@ -31,7 +103,8 @@ type DockerContainer struct {
 	} `json:"State"`
 }
 
-func cmdLocalDB(args []string) error {
+/*
+func cmdLocalDB(cmdr *commander.Command, args []string) error {
 	// all the localdb subcommands will need to use docker somehow
 	// make sure it is accessible
 	_, err := exec.LookPath("docker")
@@ -52,8 +125,9 @@ func cmdLocalDB(args []string) error {
 	}
 	panic("unreachable")
 }
+*/
 
-func cmdLocalDBCreate(args []string) error {
+func cmdLocalDBCreate(cmdr *commander.Command, args []string) error {
 	var err error
 
 	pwd, err := os.Getwd()
@@ -81,7 +155,7 @@ func cmdLocalDBCreate(args []string) error {
 	return err
 }
 
-func cmdLocalDBStart(args []string) error {
+func cmdLocalDBStart(cmdr *commander.Command, args []string) error {
 	var err error
 	// make sure 'ccs-mysql' is running
 	mysql, err := dockerContainer(dkrMysql)
@@ -119,7 +193,7 @@ func cmdLocalDBStart(args []string) error {
 	return err
 }
 
-func cmdLocalDBStop(args []string) error {
+func cmdLocalDBStop(cmdr *commander.Command, args []string) error {
 	var err error
 
 	run := func(cmd string, args ...string) error {

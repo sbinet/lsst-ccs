@@ -2,10 +2,11 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"log"
 	"os"
+
+	"github.com/gonuts/commander"
+	"github.com/gonuts/flag"
 )
 
 const (
@@ -17,39 +18,38 @@ var (
 		"org-lsst-ccs-subsystem-fcs",
 		"org-lsst-ccs-localdb",
 	}
+
+	app *commander.Command
 )
 
-func main() {
-	flag.Parse()
-	if flag.NArg() <= 0 {
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	cmd := flag.Arg(0)
-	err := dispatch(cmd, flag.Args()[1:])
-	if err != nil {
-		log.Fatalf("error: %v\n", err)
+func init() {
+	app = &commander.Command{
+		UsageLine: "fcs-mgr",
+		Subcommands: []*commander.Command{
+			fcsMakeCmdInit(),
+			fcsMakeCmdBuild(),
+			fcsMakeCmdLocalDB(),
+			fcsMakeCmdUpdate(),
+			fcsMakeCmdDist(),
+			fcsMakeCmdRun(),
+		},
+		Flag: *flag.NewFlagSet("fcs-mgr", flag.ExitOnError),
 	}
 }
 
-func dispatch(cmd string, args []string) error {
-	switch cmd {
-	case "init":
-		return cmdInit(args)
-	case "build":
-		return cmdBuild(args)
-	case "localdb":
-		return cmdLocalDB(args)
-	case "update":
-		return cmdUpdate(args)
-	case "dist":
-		return cmdDist(args)
-	case "run":
-		return cmdRun(args)
-	default:
-		return fmt.Errorf("unknown command %q\n", cmd)
+func main() {
+	err := app.Flag.Parse(os.Args[1:])
+	if err != nil {
+		log.Printf("error parsing flags: %v\n", err)
+		os.Exit(1)
 	}
 
-	panic("unreachable")
+	args := app.Flag.Args()
+	err = app.Dispatch(args)
+	if err != nil {
+		log.Printf("error dispatching command: %v\n", err)
+		os.Exit(1)
+	}
+
+	os.Exit(0)
 }

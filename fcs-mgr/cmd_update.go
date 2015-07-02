@@ -6,9 +6,28 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/gonuts/commander"
+	"github.com/gonuts/flag"
 )
 
-func cmdUpdate(args []string) error {
+func fcsMakeCmdUpdate() *commander.Command {
+	cmd := &commander.Command{
+		Run:       cmdUpdate,
+		UsageLine: "update",
+		Short:     "update FCS/CCS workarea source code",
+		Long: `
+update updates the source code of the FCS/CCS workarea.
+
+ex:
+ $ fcs-mgr update
+`,
+		Flag: *flag.NewFlagSet("fcs-mgr-update", flag.ExitOnError),
+	}
+	return cmd
+}
+
+func cmdUpdate(cmdr *commander.Command, args []string) error {
 	if len(args) > 0 {
 		return fmt.Errorf(
 			"invalid number of arguments. got %d. want 0",
