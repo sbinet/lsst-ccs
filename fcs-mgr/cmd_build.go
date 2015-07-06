@@ -76,7 +76,7 @@ func buildRepo(rdir string) error {
 	}
 	defer f.Close()
 
-	cmd := exec.Command("fcs-boot", "-tty=false", "-lsst="+rdir, "mvn", "clean", "install")
+	cmd := exec.Command("fcs-boot", "-name=ccs-build-"+repo, "-tty=false", "-lsst="+rdir, "mvn", "clean", "install")
 	cmd.Stdout = f
 	cmd.Stderr = f
 
