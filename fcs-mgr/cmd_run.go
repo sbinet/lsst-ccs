@@ -32,7 +32,7 @@ func cmdRun(cmdr *commander.Command, args []string) error {
 		return err
 	}
 
-	subargs := []string{"-mysql", "-lsst=" + dir, "fcs-run"}
+	subargs := []string{"-mysql", "-lsst=" + dir, "-memory=256m", "fcs-run"}
 	if len(args) <= 0 {
 		subargs = append(subargs, "shell")
 	} else {
