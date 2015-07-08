@@ -16,7 +16,7 @@ func fcsMakeCmdDeploy() *commander.Command {
 		UsageLine: "deploy",
 		Short:     "deploy sources and binaries to PC-104",
 		Long: `
-deploy deploys the sources and binaries to the embedded PC-104.
+deploy deploys sources and binaries (FCS+c-wrapper) to the embedded PC-104.
 
 ex:
  $ fcs-mgr deploy
