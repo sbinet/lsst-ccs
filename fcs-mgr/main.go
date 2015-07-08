@@ -31,6 +31,7 @@ func init() {
 			fcsMakeCmdLocalDB(),
 			fcsMakeCmdUpdate(),
 			fcsMakeCmdDist(),
+			fcsMakeCmdDeploy(),
 			fcsMakeCmdRun(),
 		},
 		Flag: *flag.NewFlagSet("fcs-mgr", flag.ExitOnError),
