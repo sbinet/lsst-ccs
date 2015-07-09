@@ -49,6 +49,7 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		cmd.Stdin = os.Stdin
 		cmd.Stdout = flog
 		cmd.Stderr = flog
 		return cmd.Run()
@@ -63,10 +64,6 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 	log.Printf("remote: %v:%v\n", uri, odir)
 
 	cmd := exec.Command("ssh", uri, "mkdir", "-p", odir)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = flog
-	cmd.Stderr = flog
-
 	err = run(cmd)
 	if err != nil {
 		log.Fatalf("error creating directory [%s] on remote: %v\n", odir, err)
@@ -75,7 +72,6 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 	log.Printf("creating cwrapper archive...\n")
 	cmd = exec.Command("git", "archive", "-o", "../cwrapper.tar.gz", "HEAD")
 	cmd.Dir = "cwrapper-git"
-	cmd.Stdin = os.Stdin
 	err = run(cmd)
 	if err != nil {
 		log.Fatalf("error creating cwrapper archive: %v\n", err)
@@ -92,7 +88,6 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 			"-C",
 			"-r", dir, user+"@"+addr+":"+odir,
 		)
-		cmd.Stdin = os.Stdin
 		err = run(cmd)
 		if err != nil {
 			log.Printf("error transferring [%s]: %v\n", dir, err)
@@ -100,10 +95,8 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 		return err
 	}
 
-	for _, dir := range []string{
-		//"DISTRIB",
-		"cwrapper.tar.gz",
-	} {
+	{
+		dir := "cwrapper.tar.gz"
 		log.Printf("transferring [%s]...\n", dir)
 		err = xfer(dir)
 		if err != nil {
@@ -118,7 +111,6 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 			"cd cwrapper && tar zxf ../cwrapper.tar.gz &&"+
 			"cd .. && rm -rf cwrapper.tar.gz",
 	)
-	cmd.Stdin = os.Stdin
 	err = run(cmd)
 	if err != nil {
 		log.Fatalf("error uncompressing cwrapper: %v\n", err)
@@ -126,7 +118,6 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 
 	log.Printf("compiling cwrapper...\n")
 	cmd = exec.Command("ssh", uri, "cd "+odir+"/cwrapper/src/cwrapper-lpc; make")
-	cmd.Stdin = os.Stdin
 	err = run(cmd)
 	if err != nil {
 		log.Fatalf("error compiling cwrapper: %v\n", err)
