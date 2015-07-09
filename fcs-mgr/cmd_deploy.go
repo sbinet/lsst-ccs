@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"time"
 
 	"github.com/gonuts/commander"
 	"github.com/gonuts/flag"
@@ -86,7 +87,7 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 		cmd := exec.Command(
 			"scp",
 			"-C",
-			"-r", dir, user+"@"+addr+":"+odir,
+			"-r", dir, uri+":"+odir,
 		)
 		err = run(cmd)
 		if err != nil {
@@ -100,6 +101,12 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 		log.Printf("transferring [%s]...\n", dir)
 		err = xfer(dir)
 		if err != nil {
+			return err
+		}
+
+		err = os.Remove(dir)
+		if err != nil {
+			log.Printf("error cleaning up [%s]: %v\n", dir, err)
 			return err
 		}
 	}
@@ -118,11 +125,13 @@ func cmdDeploy(cmdr *commander.Command, args []string) error {
 
 	log.Printf("compiling cwrapper...\n")
 	cmd = exec.Command("ssh", uri, "cd "+odir+"/cwrapper/src/cwrapper-lpc; make")
+	start := time.Now()
 	err = run(cmd)
+	delta := time.Since(start)
 	if err != nil {
-		log.Fatalf("error compiling cwrapper: %v\n", err)
+		log.Fatalf("error compiling cwrapper: %v (%v)\n", err, delta)
 	}
-
+	log.Printf("compiling cwrapper... [done] (%v)\n", delta)
 	if err == nil {
 		flog.Close()
 		os.Remove(flog.Name())
