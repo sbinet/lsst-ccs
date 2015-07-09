@@ -16,15 +16,18 @@ const (
 	var data = [
 	        { label: "temperature", 
 			  data: [],
-			  yaxis: 1
+			  yaxis: 1,
+			  color: 1
 		    },
 	        { label: "pressure", 
 			  data: [],
-		      yaxis: 2
+			  yaxis: 2,
+			  color: "black"
 		    },
 	        { label: "hygrometry", 
 			  data: [],
-			  yaxis: 3
+			  yaxis: 3,
+			  color: 2
 		    },
 	];
 
@@ -156,15 +159,6 @@ const (
 
 
 	/*
-	// hard-code color indices to prevent them from shifting as
-	// labels are turned on/off
-
-	var i = 0;
-	$.each(datasets, function(key, val) {
-		val.color = i;
-		++i;
-	});
-
 	// insert checkboxes 
 	var choiceContainer = $("#choices");
 	$.each(datasets, function(key, val) {
