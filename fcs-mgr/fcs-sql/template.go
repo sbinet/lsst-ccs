@@ -54,7 +54,7 @@ const (
 		legend: { show: false},
 		series: {
 			lines: {
-				show: true,
+				show: false,
 				lineWidth: 1
 			},
 			shadowSize: 0
