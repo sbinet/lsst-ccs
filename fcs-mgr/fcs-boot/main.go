@@ -40,7 +40,8 @@ func main() {
 
 	subcmd := []string{
 		"run", "-t",
-		"-p=50000:50000",
+		"-p=50000:50000", // for CANopen
+		"-p=45566:45566", // for JBoss/JGroups
 		"--user=" + usr.Uid + ":" + usr.Gid,
 		"--net=host",
 		"-v", *lsst + ":/opt/lsst",

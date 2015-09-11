@@ -38,6 +38,9 @@ ADD maven-settings.xml /home/lsst/.m2/settings.xml
 ## CANOpen will need this port
 EXPOSE 50000
 
+## JGroups will need this port
+EXPOSE 45566
+
 WORKDIR /opt/lsst
 
 ## make the whole container seamlessly executable
