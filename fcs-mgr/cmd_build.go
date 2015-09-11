@@ -25,6 +25,7 @@ ex:
 `,
 		Flag: *flag.NewFlagSet("fcs-mgr-build", flag.ExitOnError),
 	}
+	cmd.Flag.Bool("test", false, "run tests")
 	return cmd
 }
 
@@ -51,7 +52,7 @@ func cmdBuild(cmdr *commander.Command, args []string) error {
 		}
 
 		go func(rdir string) {
-			errc <- buildRepo(rdir)
+			errc <- buildRepo(rdir, cmdr.Flag.Lookup("test").Value.Get().(bool))
 		}(rdir)
 
 	}
@@ -66,7 +67,8 @@ func cmdBuild(cmdr *commander.Command, args []string) error {
 	return err
 }
 
-func buildRepo(rdir string) error {
+func buildRepo(rdir string, tests bool) error {
+	skip := !tests
 	repo := filepath.Base(rdir)
 	log.Printf("building repo [%s]...\n", repo)
 
@@ -76,7 +78,12 @@ func buildRepo(rdir string) error {
 	}
 	defer f.Close()
 
-	cmd := exec.Command("fcs-boot", "-name=ccs-build-"+repo, "-tty=false", "-lsst="+rdir, "mvn", "clean", "install")
+	cmd := exec.Command(
+		"fcs-boot", "-name=ccs-build-"+repo, "-tty=false", "-lsst="+rdir,
+		"mvn",
+		fmt.Sprintf("-Dmaven.test.skip=%v", skip),
+		"clean", "install",
+	)
 	cmd.Stdout = f
 	cmd.Stderr = f
 
