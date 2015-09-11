@@ -253,8 +253,8 @@ func setupEnv() {
 		{"FCS_VERSION", fcsVersion},
 		{"LOCALDB_VERSION", dbVersion},
 		// logging
-		{"P0", "org.lsst.ccs.utilities.logging.ConsoleHandlerN.level=ALL"},
-		{"P1", "org.lsst.ccs.utilities.logging.FileHandlerN.formatter=org.lsst.ccs.utilities.logging.TextFormatter"},
+		{"P0", "java.util.logging.ConsoleHandler.level=ALL"},
+		{"P1", "java.util.logging.FileHandler.formatter=org.lsst.ccs.utilities.logging.TextFormatter"},
 		{"P2", ".level=WARNING"},
 		{"P3", "org.lsst.ccs.level=ALL"},
 		{"P4", "org.lsst.ccs.bus.level=INFO"},
@@ -274,7 +274,7 @@ func setupEnv() {
 		{"DESCRIPTION_FILE", "testbenchLPC.groo"},
 		{"CONFIGURATION_FILE", "testbenchLPC_XXXXX_.properties"},
 		{"WORKDIR", filepath.Join(wdir, "work")},
-		{"LOGFILENAME", "org.lsst.ccs.utilites.logging.FileHandlerN.pattern=%W/logs/ccs-logs-%A-testbenchLPC.log"},
+		{"LOGFILENAME", "java.util.logging.FileHandler.pattern=%W/logs/ccs-logs-%A-testbenchLPC.log"},
 	} {
 		err := os.Setenv(v[0], os.ExpandEnv(v[1]))
 		if err != nil {
@@ -294,6 +294,8 @@ func dispatch(errc chan error) {
 	switch flag.Arg(0) {
 	case "lpc":
 		runTestbench(errc)
+	case "sim-autochanger":
+		runSimAutochanger(errc)
 	case "console":
 		runConsole(errc)
 	case "jas3":
@@ -333,6 +335,45 @@ func runTestbench(errc chan error) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	log.Printf("running: %v...\n", cmd.Args)
+
+	atexit(func() {
+		killProc(cmd)
+	})
+
+	errc <- cmd.Run()
+}
+
+func runSimAutochanger(errc chan error) {
+	os.Setenv("DESCRIPTION_FILE", "autochanger__simulation.groovy")
+	os.Setenv("CONFIGURATION_FILE", "")
+
+	cmd := exec.Command(
+		filepath.Join(
+			os.Getenv("TEST_ENV_ROOT"),
+			"org-lsst-ccs-subsystem-fcs-main-"+fcsVersion,
+			"bin",
+			"CCSbootstrap.sh",
+		),
+		"-app", "FcsSubsystem",
+		"--description", "/org/lsst/ccs/subsystems/fcs/conf/"+os.Getenv("DESCRIPTION_FILE"),
+		"-D", os.Getenv("P0"),
+		"-D", os.Getenv("P1"),
+		"-D", os.Getenv("P2"),
+		"-D", os.Getenv("P3"),
+		"-D", os.Getenv("P4"),
+		"-D", os.Getenv("P5"),
+		"-D", "org.lsst.ccs.startInEngineeringMode=true",
+		"-D", "org.lsst.ccs.logging.StackTraceFormats.depth=-1",
+		"-D", os.Getenv("WORKDIR"),
+		"-D", os.Getenv("LOGFILENAME"),
+	)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	log.Printf("running: %v...\n", cmd.Args)
 
 	atexit(func() {
 		killProc(cmd)
