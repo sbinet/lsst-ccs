@@ -3,6 +3,7 @@ linux design
 
 http://www.makelinux.net/ldd3/
 http://lxr.free-electrons.com/source/include/linux/pci.h
+https://www.kernel.org/doc/Documentation/driver-model/driver.txt
 
 685 /**
 686  * struct device - The basic device structure
