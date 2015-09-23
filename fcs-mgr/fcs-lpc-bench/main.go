@@ -7,6 +7,9 @@ import (
 	"net"
 	"os"
 	"strconv"
+
+	"github.com/sbinet/lsst-ccs/fwk"
+	"github.com/sbinet/lsst-ccs/fwk/drivers/hd2001"
 )
 
 const (
@@ -18,8 +21,21 @@ var (
 )
 
 func main() {
+
+	app, err := fwk.New(
+		"lpc",
+		hd2001.New("hpt", 50000),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	err = app.Run()
+	if err != nil {
+		panic(err)
+	}
+
 	// Listen for incoming connections.
-	//listen, err := net.Listen("tcp", "134.158.120.94:"+port)
 	listen, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
