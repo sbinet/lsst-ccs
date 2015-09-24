@@ -56,6 +56,16 @@ func (dev *Device) Boot(ctx context.Context) error {
 		}()
 
 	}
+
+	go func() {
+		for {
+			select {
+			case <-dev.Tick():
+				dev.Infof("tick...\n")
+			}
+		}
+	}()
+
 loop:
 	for {
 		select {
