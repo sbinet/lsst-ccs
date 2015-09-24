@@ -12,23 +12,49 @@ type Node struct {
 	Nodes []Node
 }
 
-type ADC struct {
-	NodeID int
-	Serial string
-	TxType int
+var System = systemType{
+	name:    "root",
+	devices: make([]Device, 0, 2),
+	devmap:  make(map[string]Device),
 }
 
-type DAC struct {
-	NodeID int
-	Serial string
+type systemType struct {
+	name    string
+	devices []Device
+	devmap  map[string]Device
+}
+
+func (sys *systemType) Devices() []Device {
+	return sys.devices
+}
+
+func (sys *systemType) Name() string {
+	return sys.name
+}
+
+func (sys *systemType) Register(dev Device) {
+	sys.devices = append(sys.devices, dev)
+	d, dup := sys.devmap[dev.Name()]
+	if dup {
+		panic(fmt.Errorf(
+			"fwk: duplicate device %q (old=%#v new=%#v)",
+			dev.Name(),
+			d, dev,
+		))
+	}
+	sys.devmap[dev.Name()] = dev
+}
+
+func (sys *systemType) Device(name string) Device {
+	return sys.devmap[name]
 }
 
 // Device represents a physical device mounted onto some hardware.
 type Device interface {
 	Name() string
-	Release() error
-	Parent() Device
-	Driver() Driver
+	//Release() error
+	//Parent() Device
+	//Driver() Driver
 }
 
 // Driver is responsible for initializing devices.
@@ -38,6 +64,7 @@ type Driver interface {
 }
 
 type Module interface {
+	Name() string
 	Boot(ctx context.Context) error
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -51,6 +78,14 @@ type App struct {
 }
 
 func New(name string, modules ...Module) (*App, error) {
+	for _, module := range modules {
+		dev := module.(Device)
+		if System.Device(module.Name()) == dev {
+			continue
+		}
+		System.Register(dev)
+	}
+
 	return &App{
 		Base:    NewBase(name),
 		ctx:     context.Background(),

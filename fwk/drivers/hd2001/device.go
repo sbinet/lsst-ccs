@@ -3,7 +3,6 @@ package hd2001
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 
 	"github.com/sbinet/lsst-ccs/fwk"
 	"github.com/sbinet/lsst-ccs/fwk/drivers/canbus"
@@ -31,11 +30,32 @@ func (dev *Device) Boot(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	dev.Infof("--- booting bus...\n")
-	go dev.bus.Boot(ctx)
-
 	dev.Infof("for-select...\n")
 
+	if true {
+		go func() {
+			dev.bus.Send <- canbus.Command{
+				Name: canbus.Rsdo,
+				Data: []byte("41,6401,3"),
+			}
+			dev.Infof("sent 3\n")
+		}()
+		go func() {
+			dev.bus.Send <- canbus.Command{
+				Name: canbus.Rsdo,
+				Data: []byte("41,6401,2"),
+			}
+			dev.Infof("sent 2\n")
+		}()
+		go func() {
+			dev.bus.Send <- canbus.Command{
+				Name: canbus.Rsdo,
+				Data: []byte("41,6401,4"),
+			}
+			dev.Infof("sent 4\n")
+		}()
+
+	}
 loop:
 	for {
 		select {
@@ -44,26 +64,11 @@ loop:
 		case cmd := <-dev.bus.Recv:
 			dev.Infof("received: %v\n", cmd)
 			switch cmd.Name {
-			case canbus.Boot:
-				id, err := strconv.Atoi(string(cmd.Data))
-				if err != nil {
-					dev.Errorf("error decoding node id: %v\n", err)
-					return err
-				}
-				dev.Infof("node=%d\n", id)
-				dev.node = int32(id)
-				dev.booted = true
+			case canbus.Rsdo:
+				dev.Infof("rsdo: %v\n", cmd)
 
-				reply := canbus.Command{
-					Name: canbus.Info,
-					Data: []byte(fmt.Sprintf("%d", id)),
-				}
-
-				dev.bus.Send <- reply
-				dev.Infof("sent reply: %v\n", reply)
-
-			case canbus.Info:
-				dev.Infof("info: %v\n", string(cmd.Data))
+			default:
+				dev.Errorf("unknown canbus.Cmd: %v\n", cmd.Name)
 			}
 		}
 	}
@@ -85,10 +90,11 @@ func (dev *Device) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func New(name string, port int) *Device {
+func New(name string, bus string) *Device {
+	dev := fwk.System.Device(bus)
 	return &Device{
 		Base: fwk.NewBase(name),
-		bus:  canbus.New("canbus-"+name, port),
+		bus:  dev.(*canbus.Bus),
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 
 	"golang.org/x/net/context"
@@ -32,7 +33,7 @@ type Command struct {
 	Data []byte
 }
 
-func (cmd *Command) bytes() []byte {
+func (cmd Command) bytes() []byte {
 	o := make([]byte, 0, len(cmd.Name)+1+len(cmd.Data))
 	o = append(o, []byte(cmd.Name)...)
 	o = append(o, sepComma...)
@@ -43,6 +44,24 @@ func (cmd *Command) bytes() []byte {
 	return o
 }
 
+func (cmd Command) String() string {
+	return fmt.Sprintf("Command{%s,%s}", cmd.Name, string(cmd.Data))
+}
+
+func newCommand(data []byte) Command {
+	data = bytes.TrimSpace(data)
+	if !bytes.Contains(data, sepComma) {
+		return Command{}
+	}
+
+	tokens := bytes.SplitN(data, sepComma, 2)
+	cmd := Command{
+		Name: Cmd(tokens[0]),
+		Data: tokens[1],
+	}
+	return cmd
+}
+
 type Bus struct {
 	*fwk.Base
 	port  int
@@ -50,18 +69,32 @@ type Bus struct {
 	conn  net.Conn
 	nodes []int
 
-	Send chan Command
-	Recv chan Command
+	adc *ADC
+	dac *DAC
+
+	devices []fwk.Device
+	Send    chan Command
+	Recv    chan Command
 }
 
-func New(name string, port int) *Bus {
-	return &Bus{
-		Base:  fwk.NewBase(name),
-		port:  port,
-		nodes: make([]int, 0, 2),
-		Send:  make(chan Command),
-		Recv:  make(chan Command),
+func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) *Bus {
+	devs := append([]fwk.Device{adc, dac}, devices...)
+	bus := &Bus{
+		Base:    fwk.NewBase(name),
+		port:    port,
+		nodes:   make([]int, 0, 2),
+		adc:     adc,
+		dac:     dac,
+		Send:    make(chan Command),
+		Recv:    make(chan Command),
+		devices: devs,
 	}
+	fwk.System.Register(bus)
+	for _, dev := range bus.devices {
+		fwk.System.Register(dev)
+	}
+
+	return bus
 }
 
 func (bus *Bus) Run(ctx context.Context) error {
@@ -81,6 +114,7 @@ func (bus *Bus) Boot(ctx context.Context) error {
 		return err
 	}
 
+	bus.Infof(">>> boot... [done]\n")
 	return err
 }
 
@@ -101,15 +135,19 @@ func (bus *Bus) Shutdown(ctx context.Context) error {
 
 func (bus *Bus) init() error {
 	var err error
-	errc := make(chan error)
-	go bus.startCWrapper(errc)
+	if true {
+		errc := make(chan error)
+		go bus.startCWrapper(errc)
+	}
 
+	bus.Infof("... starting tcp server ...\n")
 	bus.l, err = net.Listen("tcp", fmt.Sprintf(":%d", bus.port))
 	if err != nil {
 		bus.Errorf("error starting tcp server: %v\n", err)
 		return err
 	}
 
+	bus.Infof("... waiting for a connection ...\n")
 	bus.conn, err = bus.l.Accept()
 	if err != nil {
 		bus.Errorf("error accepting connection: %v\n", err)
@@ -129,56 +167,142 @@ func (bus *Bus) Close() error {
 }
 
 func (bus *Bus) handle(quit chan struct{}) {
+	bus.Infof("handle...\n")
+	const bufsz = 1024
+	buf := make([]byte, bufsz)
 
-	reader := chanFromConn(bus.conn)
-	writer := chanToConn(bus.conn)
+	// consume welcome message
+	n, err := bus.conn.Read(buf)
+	if err != nil {
+		bus.Errorf("error receiving welcome message: %v\n", err)
+		return
+	}
+	if n <= 0 {
+		bus.Errorf("empty welcome message!\n")
+		return
+	}
+
+	if !bytes.HasPrefix(buf[:n], []byte("TestBench ISO-8859-1")) {
+		bus.Errorf("unexpected welcome message: %q\n", string(buf[:n]))
+		return
+	}
+
+	// discover nodes
+	for len(bus.nodes) < len(bus.devices) {
+		buf = buf[:bufsz]
+		n, err := bus.conn.Read(buf)
+		if err != nil {
+			bus.Errorf("error receiving boot message: %v\n", err)
+			return
+		}
+		if n <= 0 {
+			// nothing was read...
+			continue
+		}
+		buf = buf[:n]
+		cmd := newCommand(buf)
+		switch cmd.Name {
+		case Boot:
+			id, err := strconv.Atoi(string(cmd.Data))
+			if err != nil {
+				bus.Errorf("error decoding node id: %v\n", err)
+				return
+			}
+			bus.nodes = append(bus.nodes, id)
+		default:
+			bus.Errorf("unexpected command name: %q (cmd=%v)\n", cmd.Name, cmd)
+		}
+	}
+
+	type Node struct {
+		id       int
+		device   int
+		vendor   int
+		product  int
+		revision int
+		serial   string
+	}
+
+	nodes := make([]Node, len(bus.nodes))
+	// fetch infos about nodes
+	for _, id := range bus.nodes {
+		buf := []byte(fmt.Sprintf("%s,%d\n", Info, id))
+		_, err := bus.conn.Write(buf)
+		if err != nil {
+			bus.Errorf("error sending info message: %v\n", err)
+			return
+		}
+
+		buf = make([]byte, bufsz)
+		n, err := bus.conn.Read(buf)
+		if err != nil {
+			bus.Errorf("error receiving info message: %v\n", err)
+			return
+		}
+		if n <= 0 {
+			// nothing was read...
+			continue
+		}
+		buf = buf[:n]
+		cmd := newCommand(buf)
+		switch cmd.Name {
+		case Info:
+			var node Node
+			_, err = fmt.Fscanf(
+				bytes.NewReader(cmd.Data),
+				"%d,%d,%d,%d,%d,%s",
+				&node.id,
+				&node.device,
+				&node.vendor,
+				&node.product,
+				&node.revision,
+				&node.serial,
+			)
+			if err != nil {
+				bus.Errorf("error decoding %v: %v\n", cmd, err)
+				return
+			}
+			bus.Infof("node=%v\n", node)
+			nodes = append(nodes, node)
+			//TODO(sbinet): better/more-general handling
+			switch node.serial {
+			case bus.adc.serial:
+				bus.adc.node = node.id
+				bus.adc.bus = bus
+			case bus.dac.serial:
+				bus.dac.node = node.id
+				bus.dac.bus = bus
+			}
+
+		default:
+			bus.Errorf("unexpected command name: %q (cmd: %v)\n", cmd.Name, cmd)
+			return
+		}
+	}
+
+	bus.Infof("adc=%#v\n", bus.adc)
+	bus.Infof("dac=%#v\n", bus.dac)
 
 loop:
 	for {
 		select {
-		case msg := <-reader:
-			if msg.err != nil {
-				bus.Errorf("error receiving message: %v\n", msg.err)
+		case cmd := <-bus.Send:
+			n, err := bus.conn.Write(cmd.bytes())
+			if err != nil {
+				bus.Errorf("error sending command %v: %v\n", cmd, err)
 				return
 			}
 
-			msg.data = bytes.TrimSpace(msg.data)
-			if !bytes.Contains(msg.data, sepComma) {
-				bus.Debugf("received: %q\n", string(msg.data))
-				continue
+			// TODO(sbinet) only read back when needed?
+			buf = buf[:bufsz]
+			n, err = bus.conn.Read(buf)
+			if err != nil {
+				bus.Errorf("error receiving message: %v\n", err)
+				return
 			}
-
-			tokens := bytes.SplitN(msg.data, sepComma, 2)
-			cmd := Command{
-				Name: Cmd(tokens[0]),
-				Data: tokens[1],
-			}
-			bus.Infof("tokens: %v\n", cmd)
-			/*
-				switch cmd.Name {
-				case Boot:
-					id, err := strconv.Atoi(string(cmd.Data))
-					if err != nil {
-						bus.Errorf("error decoding node id: %v\n", err)
-						continue
-					}
-					bus.nodes = append(bus.nodes, id)
-					go func() {
-						writer <- message{
-							data: []byte(fmt.Sprintf("%s,%d", Info, id)),
-						}
-					}()
-					continue
-				}
-			*/
+			buf = buf[:n]
+			cmd = newCommand(buf)
 			bus.Recv <- cmd
-
-		case cmd := <-bus.Send:
-			go func() {
-				writer <- message{
-					data: cmd.bytes(),
-				}
-			}()
 
 		case <-quit:
 			bus.Debugf("quit...\n")
