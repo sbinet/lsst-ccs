@@ -2,7 +2,10 @@ package fwk
 
 import (
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 )
@@ -36,28 +39,47 @@ func (app *App) AddModule(m Module) {
 func (app *App) Run() error {
 	var err error
 
-	err = app.sysBoot()
+	ctx, cancel := context.WithCancel(app.ctx)
+	defer cancel()
+
+	sigch := make(chan os.Signal)
+	signal.Notify(sigch, os.Interrupt, os.Kill)
+
+	err = app.sysStart(ctx)
 	if err != nil {
+		app.Errorf("start-error: %v\n", err)
+		cancel()
 		return err
 	}
 
-	err = app.sysStart()
-	if err != nil {
-		return err
+	tick := time.NewTicker(1 * time.Second)
+
+loop:
+	for {
+		select {
+
+		case <-tick.C:
+			app.Debugf("tick...\n")
+			err = app.sysTick(ctx)
+			if err != nil {
+				app.Errorf("tick error: %v\n", err)
+				cancel()
+				break loop
+			}
+
+		case <-sigch:
+			app.Infof("stopping app...\n")
+			break loop
+
+		case <-ctx.Done():
+			app.Infof("ctx.done!!\n")
+			return ctx.Err()
+		}
 	}
 
-	err = app.sysRun()
+	err = app.sysStop(ctx)
 	if err != nil {
-		return err
-	}
-
-	err = app.sysStop()
-	if err != nil {
-		return err
-	}
-
-	err = app.sysShutdown()
-	if err != nil {
+		cancel()
 		return err
 	}
 
@@ -85,26 +107,15 @@ func (app *App) visit(node Node) error {
 	return nil
 }
 
-func (app *App) sysBoot() error {
-	var err error
-	ctx, cancel := context.WithCancel(app.ctx)
-	defer cancel()
-
+func (app *App) sysStart(ctx context.Context) error {
+	errc := make(chan error, len(app.modules))
 	for _, m := range app.modules {
-		err = m.Boot(ctx)
-		if err != nil {
-			return err
-		}
+		go func(m Module) {
+			errc <- m.Start(ctx)
+		}(m)
 	}
-
-	return err
-}
-
-func (app *App) sysStart() error {
-	ctx, cancel := context.WithCancel(app.ctx)
-	defer cancel()
-	for _, m := range app.modules {
-		err := m.Start(ctx)
+	for range app.modules {
+		err := <-errc
 		if err != nil {
 			return err
 		}
@@ -112,30 +123,48 @@ func (app *App) sysStart() error {
 	return nil
 }
 
-func (app *App) sysRun() error {
-	return nil
-}
-
-func (app *App) sysStop() error {
-	ctx, cancel := context.WithCancel(app.ctx)
-	defer cancel()
+func (app *App) sysStop(ctx context.Context) error {
+	errc := make(chan error, len(app.modules))
 	for _, m := range app.modules {
-		err := m.Stop(ctx)
+		go func(m Module) {
+			errc <- m.Stop(ctx)
+		}(m)
+	}
+
+	for range app.modules {
+		err := <-errc
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
-func (app *App) sysShutdown() error {
-	ctx, cancel := context.WithCancel(app.ctx)
-	defer cancel()
+func (app *App) sysTick(ctx context.Context) error {
+
+	errc := make(chan error, len(app.modules))
 	for _, m := range app.modules {
-		err := m.Shutdown(ctx)
+		go func(m Module) {
+			tick, ok := m.(Ticker)
+			if !ok {
+				errc <- nil
+				return
+			}
+			err := tick.Tick(ctx)
+			if err != nil {
+				app.Errorf("tick error from %q: %v\n", m.Name(), err)
+			}
+			errc <- err
+		}(m)
+	}
+
+	for range app.modules {
+		err := <-errc
 		if err != nil {
 			return err
 		}
 	}
+
 	return nil
 }

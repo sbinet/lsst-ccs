@@ -7,7 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"strconv"
+	"sync"
 	"syscall"
 
 	"golang.org/x/net/context"
@@ -27,6 +27,14 @@ const (
 	Sync     = "sync"
 )
 
+type Error struct {
+	Code int
+}
+
+func (err Error) Error() string {
+	return fmt.Sprintf("canbus: error code=%v", err.Code)
+}
+
 // Command is a command sent/received on the CAN bus
 type Command struct {
 	Name Cmd
@@ -38,14 +46,32 @@ func (cmd Command) bytes() []byte {
 	o = append(o, []byte(cmd.Name)...)
 	o = append(o, sepComma...)
 	o = append(o, cmd.Data...)
-	if !bytes.HasSuffix(o, []byte("\n")) {
-		o = append(o, []byte("\n")...)
+	if bytes.HasSuffix(cmd.Data, []byte("\n")) {
+		panic("boo")
 	}
+	o = append(o, '\r', 0, '\n')
 	return o
 }
 
 func (cmd Command) String() string {
 	return fmt.Sprintf("Command{%s,%s}", cmd.Name, string(cmd.Data))
+}
+
+func (cmd Command) Err() error {
+	node := 0
+	ecode := 0
+	_, err := fmt.Fscanf(bytes.NewReader(cmd.Data),
+		"%x,%x",
+		&node,
+		&ecode,
+	)
+	if err != nil {
+		return err
+	}
+	if ecode == 0 {
+		return nil
+	}
+	return Error{ecode}
 }
 
 func newCommand(data []byte) Command {
@@ -67,14 +93,17 @@ type Bus struct {
 	port  int
 	l     net.Listener
 	conn  net.Conn
+	quit  chan struct{}
 	nodes []int
 
 	adc *ADC
 	dac *DAC
 
 	devices []fwk.Device
-	Send    chan Command
-	Recv    chan Command
+
+	mux  sync.Mutex
+	send chan Command
+	recv chan Command
 }
 
 func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) *Bus {
@@ -82,11 +111,12 @@ func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) *Bus 
 	bus := &Bus{
 		Base:    fwk.NewBase(name),
 		port:    port,
+		quit:    make(chan struct{}),
 		nodes:   make([]int, 0, 2),
 		adc:     adc,
 		dac:     dac,
-		Send:    make(chan Command),
-		Recv:    make(chan Command),
+		send:    make(chan Command),
+		recv:    make(chan Command),
 		devices: devs,
 	}
 	fwk.System.Register(bus)
@@ -97,12 +127,7 @@ func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) *Bus 
 	return bus
 }
 
-func (bus *Bus) Run(ctx context.Context) error {
-	var err error
-	return err
-}
-
-func (bus *Bus) Boot(ctx context.Context) error {
+func (bus *Bus) Start(ctx context.Context) error {
 	bus.Infof(">>> boot...\n")
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
@@ -118,18 +143,22 @@ func (bus *Bus) Boot(ctx context.Context) error {
 	return err
 }
 
-func (bus *Bus) Start(ctx context.Context) error {
-	var err error
-	return err
-}
-
 func (bus *Bus) Stop(ctx context.Context) error {
 	var err error
+	bus.Infof("stopping...\n")
+
 	return err
 }
 
 func (bus *Bus) Shutdown(ctx context.Context) error {
 	var err error
+	bus.Infof("shutdown...\n")
+
+	err = bus.Close()
+	if err != nil {
+		return err
+	}
+
 	return err
 }
 
@@ -154,20 +183,6 @@ func (bus *Bus) init() error {
 		return err
 	}
 
-	go bus.handle(nil)
-
-	return err
-}
-
-func (bus *Bus) Close() error {
-	if bus.l == nil {
-		return nil
-	}
-	return bus.l.Close()
-}
-
-func (bus *Bus) handle(quit chan struct{}) {
-	bus.Infof("handle...\n")
 	const bufsz = 1024
 	buf := make([]byte, bufsz)
 
@@ -175,16 +190,16 @@ func (bus *Bus) handle(quit chan struct{}) {
 	n, err := bus.conn.Read(buf)
 	if err != nil {
 		bus.Errorf("error receiving welcome message: %v\n", err)
-		return
+		return err
 	}
 	if n <= 0 {
 		bus.Errorf("empty welcome message!\n")
-		return
+		return io.ErrUnexpectedEOF
 	}
 
 	if !bytes.HasPrefix(buf[:n], []byte("TestBench ISO-8859-1")) {
 		bus.Errorf("unexpected welcome message: %q\n", string(buf[:n]))
-		return
+		return io.ErrUnexpectedEOF
 	}
 
 	// discover nodes
@@ -193,7 +208,7 @@ func (bus *Bus) handle(quit chan struct{}) {
 		n, err := bus.conn.Read(buf)
 		if err != nil {
 			bus.Errorf("error receiving boot message: %v\n", err)
-			return
+			return err
 		}
 		if n <= 0 {
 			// nothing was read...
@@ -203,14 +218,17 @@ func (bus *Bus) handle(quit chan struct{}) {
 		cmd := newCommand(buf)
 		switch cmd.Name {
 		case Boot:
-			id, err := strconv.Atoi(string(cmd.Data))
+			id := 0
+			_, err := fmt.Fscanf(bytes.NewReader(cmd.Data), "%x", &id)
 			if err != nil {
 				bus.Errorf("error decoding node id: %v\n", err)
-				return
+				return err
 			}
+			bus.Infof("detected node 0x%x\n", id)
 			bus.nodes = append(bus.nodes, id)
 		default:
 			bus.Errorf("unexpected command name: %q (cmd=%v)\n", cmd.Name, cmd)
+			return fmt.Errorf("unexpected command %q", cmd.Name)
 		}
 	}
 
@@ -226,18 +244,18 @@ func (bus *Bus) handle(quit chan struct{}) {
 	nodes := make([]Node, len(bus.nodes))
 	// fetch infos about nodes
 	for _, id := range bus.nodes {
-		buf := []byte(fmt.Sprintf("%s,%d\n", Info, id))
+		buf := []byte(fmt.Sprintf("%s,%x\n", Info, id))
 		_, err := bus.conn.Write(buf)
 		if err != nil {
 			bus.Errorf("error sending info message: %v\n", err)
-			return
+			return err
 		}
 
 		buf = make([]byte, bufsz)
 		n, err := bus.conn.Read(buf)
 		if err != nil {
 			bus.Errorf("error receiving info message: %v\n", err)
-			return
+			return err
 		}
 		if n <= 0 {
 			// nothing was read...
@@ -250,7 +268,7 @@ func (bus *Bus) handle(quit chan struct{}) {
 			var node Node
 			_, err = fmt.Fscanf(
 				bytes.NewReader(cmd.Data),
-				"%d,%d,%d,%d,%d,%s",
+				"%x,%x,%x,%x,%x,%s",
 				&node.id,
 				&node.device,
 				&node.vendor,
@@ -260,7 +278,7 @@ func (bus *Bus) handle(quit chan struct{}) {
 			)
 			if err != nil {
 				bus.Errorf("error decoding %v: %v\n", cmd, err)
-				return
+				return err
 			}
 			bus.Infof("node=%v\n", node)
 			nodes = append(nodes, node)
@@ -275,18 +293,54 @@ func (bus *Bus) handle(quit chan struct{}) {
 			}
 
 		default:
-			bus.Errorf("unexpected command name: %q (cmd: %v)\n", cmd.Name, cmd)
-			return
+			err = fmt.Errorf("unexpected command name: %q (cmd: %v)", cmd.Name, cmd)
+			bus.Errorf("error: %v\n", err)
+			return err
 		}
 	}
 
 	bus.Infof("adc=%#v\n", bus.adc)
 	bus.Infof("dac=%#v\n", bus.dac)
 
+	err = bus.adc.init()
+	if err != nil {
+		bus.Errorf("error initializing ADC: %v\n", err)
+		return err
+	}
+
+	err = bus.dac.init()
+	if err != nil {
+		bus.Errorf("error initializing DAC: %v\n", err)
+		return err
+	}
+
+	go bus.run()
+
+	return err
+}
+
+func (bus *Bus) Close() error {
+	if bus.l == nil {
+		return nil
+	}
+	bus.Infof("closing tcp connection...\n")
+	close(bus.quit)
+
+	bus.Infof("closing tcp server\n")
+	return bus.l.Close()
+}
+
+func (bus *Bus) run() {
+	bus.Infof("handle...\n")
+	const bufsz = 1024
+	buf := make([]byte, bufsz)
+
+	defer bus.conn.Close()
+
 loop:
 	for {
 		select {
-		case cmd := <-bus.Send:
+		case cmd := <-bus.send:
 			n, err := bus.conn.Write(cmd.bytes())
 			if err != nil {
 				bus.Errorf("error sending command %v: %v\n", cmd, err)
@@ -302,63 +356,69 @@ loop:
 			}
 			buf = buf[:n]
 			cmd = newCommand(buf)
-			bus.Recv <- cmd
+			bus.recv <- cmd
 
-		case <-quit:
-			bus.Debugf("quit...\n")
+		case <-bus.quit:
+			bus.Infof("quit...\n")
 			break loop
 		}
 	}
 
+	close(bus.send)
+	close(bus.recv)
+}
+
+// Send sends a command down the bus and returns its reply
+func (bus *Bus) Send(icmd Command) (Command, error) {
+	var err error
+
+	bus.mux.Lock()
+	defer bus.mux.Unlock()
+
+	bus.send <- icmd
+	ocmd := <-bus.recv
+
+	if ocmd.Name != icmd.Name {
+		return ocmd, fmt.Errorf("unexpected command: %v", ocmd)
+	}
+
+	ecode := 0
+	_, err = fmt.Fscanf(bytes.NewReader(ocmd.Data),
+		"%x",
+		&ecode,
+	)
+	if err != nil {
+		return ocmd, err
+	}
+
+	// need to synchronize bus
+	// FIXME(sbinet) figure out what exactly happens.
+	if ecode == -1 {
+		buf := make([]byte, 1024)
+		n, err := bus.conn.Read(buf)
+		if err != nil {
+			bus.Errorf("error receiving message: %v\n", err)
+			return ocmd, err
+		}
+		buf = buf[:n]
+		cmd := newCommand(buf)
+		return cmd, err
+	}
+
+	return ocmd, err
+}
+
+func (bus *Bus) ADC() *ADC {
+	return bus.adc
+}
+
+func (bus *Bus) DAC() *DAC {
+	return bus.dac
 }
 
 var (
 	sepComma = []byte(",")
 )
-
-type message struct {
-	data []byte
-	err  error
-}
-
-// chanFromConn creates a channel from a Conn object, and sends everything it
-//  Read()s from the socket to the channel.
-func chanFromConn(conn net.Conn) chan message {
-	c := make(chan message)
-
-	go func() {
-		b := make([]byte, 1024)
-
-		for {
-			n, err := conn.Read(b)
-			if n <= 0 {
-				c <- message{data: nil, err: err}
-				break
-			}
-			res := make([]byte, n)
-			// Copy the buffer so it doesn't get changed while read by the recipient.
-			copy(res, b[:n])
-			c <- message{data: res, err: err}
-		}
-	}()
-
-	return c
-}
-
-func chanToConn(conn net.Conn) chan message {
-	c := make(chan message)
-	go func() {
-		for {
-			msg := <-c
-			_, err := io.Copy(conn, bytes.NewReader(msg.data))
-			//_, err := conn.Write(msg.data)
-			if err != nil {
-				break
-			}
-		}
-	}()
-	return c
-}
 
 func (bus *Bus) startCWrapper(errc chan error) {
 	host, err := bus.host()

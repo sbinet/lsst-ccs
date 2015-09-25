@@ -16,11 +16,11 @@ func main() {
 		"lpc",
 		canbus.New(
 			"canbus", port,
-			canbus.NewADC("ai814", "c7c80499", 1),
+			canbus.NewADC("ai814", "c7c80499", 0x1),
 			canbus.NewDAC("ao412", "c7c60327"),
 		),
+		canbus.NewLED("led", "canbus"),
 		hd2001.New("hpt", "canbus"),
-		hd2001.New("hpt-2", "canbus"),
 	)
 	if err != nil {
 		panic(err)

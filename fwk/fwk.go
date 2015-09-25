@@ -25,8 +25,11 @@ type Driver interface {
 
 type Module interface {
 	Name() string
-	Boot(ctx context.Context) error
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
-	Shutdown(ctx context.Context) error
+}
+
+type Ticker interface {
+	Name() string
+	Tick(ctx context.Context) error
 }
