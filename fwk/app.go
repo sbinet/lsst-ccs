@@ -45,6 +45,13 @@ func (app *App) Run() error {
 	sigch := make(chan os.Signal)
 	signal.Notify(sigch, os.Interrupt, os.Kill)
 
+	err = app.sysBoot(ctx)
+	if err != nil {
+		app.Errorf("boot-error: %v\n", err)
+		cancel()
+		return err
+	}
+
 	err = app.sysStart(ctx)
 	if err != nil {
 		app.Errorf("start-error: %v\n", err)
@@ -53,6 +60,19 @@ func (app *App) Run() error {
 	}
 
 	tick := time.NewTicker(1 * time.Second)
+
+	quit := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-sigch:
+				app.Infof("stopping app...\n")
+				tick.Stop()
+				quit <- struct{}{}
+				return
+			}
+		}
+	}()
 
 loop:
 	for {
@@ -67,8 +87,7 @@ loop:
 				break loop
 			}
 
-		case <-sigch:
-			app.Infof("stopping app...\n")
+		case <-quit:
 			break loop
 
 		case <-ctx.Done():
@@ -78,6 +97,12 @@ loop:
 	}
 
 	err = app.sysStop(ctx)
+	if err != nil {
+		cancel()
+		return err
+	}
+
+	err = app.sysShutdown(ctx)
 	if err != nil {
 		cancel()
 		return err
@@ -107,11 +132,14 @@ func (app *App) visit(node Node) error {
 	return nil
 }
 
-func (app *App) sysStart(ctx context.Context) error {
+type modFunc func(m Module, ctx context.Context) error
+
+func (app *App) doSys(ctx context.Context, f modFunc) error {
+
 	errc := make(chan error, len(app.modules))
 	for _, m := range app.modules {
 		go func(m Module) {
-			errc <- m.Start(ctx)
+			errc <- f(m, ctx)
 		}(m)
 	}
 	for range app.modules {
@@ -123,22 +151,20 @@ func (app *App) sysStart(ctx context.Context) error {
 	return nil
 }
 
+func (app *App) sysBoot(ctx context.Context) error {
+	return app.doSys(ctx, modFunc(Module.Boot))
+}
+
+func (app *App) sysStart(ctx context.Context) error {
+	return app.doSys(ctx, modFunc(Module.Start))
+}
+
 func (app *App) sysStop(ctx context.Context) error {
-	errc := make(chan error, len(app.modules))
-	for _, m := range app.modules {
-		go func(m Module) {
-			errc <- m.Stop(ctx)
-		}(m)
-	}
+	return app.doSys(ctx, modFunc(Module.Stop))
+}
 
-	for range app.modules {
-		err := <-errc
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+func (app *App) sysShutdown(ctx context.Context) error {
+	return app.doSys(ctx, modFunc(Module.Shutdown))
 }
 
 func (app *App) sysTick(ctx context.Context) error {

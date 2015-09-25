@@ -13,7 +13,6 @@ type Device struct {
 	*fwk.Base
 	bus *canbus.Bus
 	adc *canbus.ADC
-	dac *canbus.DAC
 
 	// offsets of sensors in ADC-range
 	offsets struct {
@@ -30,14 +29,22 @@ type Device struct {
 	}
 }
 
-func (dev *Device) Start(ctx context.Context) error {
+func (dev *Device) Boot(ctx context.Context) error {
 	dev.Infof(">>> boot...\n")
+	return nil
+}
+
+func (dev *Device) Start(ctx context.Context) error {
 	dev.adc = dev.bus.ADC()
-	dev.dac = dev.bus.DAC()
 	return nil
 }
 
 func (dev *Device) Stop(ctx context.Context) error {
+	var err error
+	return err
+}
+
+func (dev *Device) Shutdown(ctx context.Context) error {
 	var err error
 	return err
 }

@@ -16,9 +16,13 @@ type LED struct {
 	cid uint8 // channel index on DAC
 }
 
-func (led *LED) Start(ctx context.Context) error {
-	led.Infof(">>> boot...\n")
+func (led *LED) Boot(ctx context.Context) error {
+	var err error
 	led.dac = led.bus.DAC()
+	return err
+}
+
+func (led *LED) Start(ctx context.Context) error {
 	return nil
 }
 
@@ -30,6 +34,10 @@ func (led *LED) Stop(ctx context.Context) error {
 	}
 
 	return err
+}
+
+func (led *LED) Shutdown(ctx context.Context) error {
+	return nil
 }
 
 func (led *LED) Tick(ctx context.Context) error {

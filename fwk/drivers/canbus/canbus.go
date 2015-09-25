@@ -25,6 +25,7 @@ const (
 	Rsdo     = "rsdo"
 	Wsdo     = "wsdo"
 	Sync     = "sync"
+	Quit     = "quit"
 )
 
 type Error struct {
@@ -44,10 +45,9 @@ type Command struct {
 func (cmd Command) bytes() []byte {
 	o := make([]byte, 0, len(cmd.Name)+1+len(cmd.Data))
 	o = append(o, []byte(cmd.Name)...)
-	o = append(o, sepComma...)
-	o = append(o, cmd.Data...)
-	if bytes.HasSuffix(cmd.Data, []byte("\n")) {
-		panic("boo")
+	if len(cmd.Data) > 0 {
+		o = append(o, sepComma...)
+		o = append(o, cmd.Data...)
 	}
 	o = append(o, '\r', 0, '\n')
 	return o
@@ -127,7 +127,7 @@ func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) *Bus 
 	return bus
 }
 
-func (bus *Bus) Start(ctx context.Context) error {
+func (bus *Bus) Boot(ctx context.Context) error {
 	bus.Infof(">>> boot...\n")
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
@@ -143,6 +143,11 @@ func (bus *Bus) Start(ctx context.Context) error {
 	return err
 }
 
+func (bus *Bus) Start(ctx context.Context) error {
+	var err error
+	return err
+}
+
 func (bus *Bus) Stop(ctx context.Context) error {
 	var err error
 	bus.Infof("stopping...\n")
@@ -153,6 +158,11 @@ func (bus *Bus) Stop(ctx context.Context) error {
 func (bus *Bus) Shutdown(ctx context.Context) error {
 	var err error
 	bus.Infof("shutdown...\n")
+
+	_, err = bus.Send(Command{Quit, nil})
+	if err != nil {
+		bus.Errorf("error closing canbus: %v\n", err)
+	}
 
 	err = bus.Close()
 	if err != nil {
@@ -347,6 +357,11 @@ loop:
 				return
 			}
 
+			switch cmd.Name {
+			case Quit:
+				break loop
+			}
+
 			// TODO(sbinet) only read back when needed?
 			buf = buf[:bufsz]
 			n, err = bus.conn.Read(buf)
@@ -376,6 +391,10 @@ func (bus *Bus) Send(icmd Command) (Command, error) {
 	defer bus.mux.Unlock()
 
 	bus.send <- icmd
+	switch icmd.Name {
+	case Quit:
+		return icmd, err
+	}
 	ocmd := <-bus.recv
 
 	if ocmd.Name != icmd.Name {
