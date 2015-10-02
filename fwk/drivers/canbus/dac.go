@@ -8,7 +8,7 @@ type DAC struct {
 	*fwk.Base
 	node   int
 	serial string
-	bus    *Bus
+	bus    Bus
 }
 
 func (dac *DAC) Node() int {

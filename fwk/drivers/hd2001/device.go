@@ -11,7 +11,7 @@ import (
 
 type Device struct {
 	*fwk.Base
-	bus *canbus.Bus
+	bus canbus.Bus
 	adc *canbus.ADC
 
 	// offsets of sensors in ADC-range
@@ -77,7 +77,7 @@ func New(name string, bus string) *Device {
 	busdev := fwk.System.Device(bus)
 	dev := &Device{
 		Base: fwk.NewBase(name),
-		bus:  busdev.(*canbus.Bus),
+		bus:  busdev.(canbus.Bus),
 	}
 	dev.offsets.H = 0.0
 	dev.offsets.P = 600.0

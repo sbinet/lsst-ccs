@@ -88,7 +88,13 @@ func newCommand(data []byte) Command {
 	return cmd
 }
 
-type Bus struct {
+type Bus interface {
+	ADC() *ADC
+	DAC() *DAC
+	Send(cmd Command) (Command, error)
+}
+
+type busImpl struct {
 	*fwk.Base
 	port  int
 	l     net.Listener
@@ -106,9 +112,9 @@ type Bus struct {
 	recv chan Command
 }
 
-func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) *Bus {
+func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) fwk.Module {
 	devs := append([]fwk.Device{adc, dac}, devices...)
-	bus := &Bus{
+	bus := &busImpl{
 		Base:    fwk.NewBase(name),
 		port:    port,
 		quit:    make(chan struct{}),
@@ -127,7 +133,7 @@ func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) *Bus 
 	return bus
 }
 
-func (bus *Bus) Boot(ctx context.Context) error {
+func (bus *busImpl) Boot(ctx context.Context) error {
 	bus.Infof(">>> boot...\n")
 	var err error
 	ctx, cancel := context.WithCancel(ctx)
@@ -143,19 +149,19 @@ func (bus *Bus) Boot(ctx context.Context) error {
 	return err
 }
 
-func (bus *Bus) Start(ctx context.Context) error {
+func (bus *busImpl) Start(ctx context.Context) error {
 	var err error
 	return err
 }
 
-func (bus *Bus) Stop(ctx context.Context) error {
+func (bus *busImpl) Stop(ctx context.Context) error {
 	var err error
 	bus.Infof("stopping...\n")
 
 	return err
 }
 
-func (bus *Bus) Shutdown(ctx context.Context) error {
+func (bus *busImpl) Shutdown(ctx context.Context) error {
 	var err error
 	bus.Infof("shutdown...\n")
 
@@ -172,7 +178,7 @@ func (bus *Bus) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (bus *Bus) init() error {
+func (bus *busImpl) init() error {
 	var err error
 	if true {
 		errc := make(chan error)
@@ -329,7 +335,7 @@ func (bus *Bus) init() error {
 	return err
 }
 
-func (bus *Bus) Close() error {
+func (bus *busImpl) Close() error {
 	if bus.l == nil {
 		return nil
 	}
@@ -340,7 +346,7 @@ func (bus *Bus) Close() error {
 	return bus.l.Close()
 }
 
-func (bus *Bus) run() {
+func (bus *busImpl) run() {
 	bus.Infof("handle...\n")
 	const bufsz = 1024
 	buf := make([]byte, bufsz)
@@ -384,7 +390,7 @@ loop:
 }
 
 // Send sends a command down the bus and returns its reply
-func (bus *Bus) Send(icmd Command) (Command, error) {
+func (bus *busImpl) Send(icmd Command) (Command, error) {
 	var err error
 
 	bus.mux.Lock()
@@ -427,11 +433,11 @@ func (bus *Bus) Send(icmd Command) (Command, error) {
 	return ocmd, err
 }
 
-func (bus *Bus) ADC() *ADC {
+func (bus *busImpl) ADC() *ADC {
 	return bus.adc
 }
 
-func (bus *Bus) DAC() *DAC {
+func (bus *busImpl) DAC() *DAC {
 	return bus.dac
 }
 
@@ -439,7 +445,7 @@ var (
 	sepComma = []byte(",")
 )
 
-func (bus *Bus) startCWrapper(errc chan error) {
+func (bus *busImpl) startCWrapper(errc chan error) {
 	host, err := bus.host()
 	if err != nil {
 		errc <- err
@@ -476,7 +482,7 @@ func (bus *Bus) startCWrapper(errc chan error) {
 	}
 }
 
-func (bus *Bus) host() (string, error) {
+func (bus *busImpl) host() (string, error) {
 	host, err := os.Hostname()
 	if err != nil {
 		bus.Errorf("could not retrieve hostname: %v\n", err)

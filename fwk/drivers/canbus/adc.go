@@ -14,7 +14,7 @@ type ADC struct {
 	node   int
 	serial string
 	tx     int
-	bus    *Bus
+	bus    Bus
 }
 
 func (adc *ADC) Node() int {

@@ -14,7 +14,7 @@ func main() {
 
 	app, err := fwk.New(
 		"lpc",
-		canbus.New(
+		canbus.NewMock(
 			"canbus", port,
 			canbus.NewADC("ai814", "c7c80499", 0x1),
 			canbus.NewDAC("ao412", "c7c60327"),

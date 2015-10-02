@@ -10,7 +10,7 @@ import (
 
 type LED struct {
 	*fwk.Base
-	bus *Bus
+	bus Bus
 	dac *DAC
 
 	cid uint8 // channel index on DAC
@@ -120,7 +120,7 @@ func NewLED(name string, bus string) *LED {
 	busdev := fwk.System.Device(bus)
 	led := &LED{
 		Base: fwk.NewBase(name),
-		bus:  busdev.(*Bus),
+		bus:  busdev.(Bus),
 		cid:  0x1,
 	}
 	return led
