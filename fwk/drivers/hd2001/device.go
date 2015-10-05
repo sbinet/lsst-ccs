@@ -55,18 +55,21 @@ func (dev *Device) Tick(ctx context.Context) error {
 
 	temp, err := dev.Temperature()
 	if err != nil {
+		dev.Errorf("error reading temperature: %v\n", err)
 		return err
 	}
 	dev.Debugf("temperature=%v C\n", temp)
 
 	hygro, err := dev.Hygrometry()
 	if err != nil {
+		dev.Errorf("error reading hygrometry: %v\n", err)
 		return err
 	}
 	dev.Debugf("hygro=%v%%\n", hygro)
 
 	press, err := dev.Pressure()
 	if err != nil {
+		dev.Errorf("error reading pressure: %v\n", err)
 		return err
 	}
 	dev.Debugf("press=%v mbar\n", press)

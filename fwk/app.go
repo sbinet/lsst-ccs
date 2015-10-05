@@ -175,6 +175,10 @@ func (app *App) sysTick(ctx context.Context) error {
 			tick, ok := m.(Ticker)
 			if !ok {
 				errc <- nil
+				app.Debugf(
+					"module [%s] does not implement fwk.Ticker\n",
+					m.Name(),
+				)
 				return
 			}
 			err := tick.Tick(ctx)

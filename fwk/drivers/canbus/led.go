@@ -46,6 +46,7 @@ func (led *LED) Tick(ctx context.Context) error {
 
 	err = led.TurnOn()
 	if err != nil {
+		led.Errorf("error turning LED ON: %v\n", err)
 		return err
 	}
 
@@ -53,6 +54,7 @@ func (led *LED) Tick(ctx context.Context) error {
 
 	err = led.TurnOff()
 	if err != nil {
+		led.Errorf("error turning LED OFF: %v\n", err)
 		return err
 	}
 	return err
@@ -83,37 +85,6 @@ func (led *LED) write(value uint32) error {
 		return err
 	}
 	return cmd.Err()
-	/*
-		cmd = <-led.bus.recv
-		switch cmd.Name {
-		case Wsdo:
-			node := 0
-			ecode := 0
-			n, err := fmt.Fscanf(
-				bytes.NewReader(cmd.Data),
-				"%x,%x",
-				&ecode,
-				&node,
-			)
-			if err != nil {
-				return err
-			}
-			if n <= 0 {
-				return io.ErrShortBuffer
-			}
-			if node != led.dac.Node() {
-				return fmt.Errorf("unexpected node. got=0x%x want=0x%x", node,
-					led.dac.Node())
-			}
-		default:
-			return fmt.Errorf("unexpected command %v", cmd)
-		}
-
-		//led.bus.Send <- Command{Rsdo, []byte(fmt.Sprintf("%x", led.dac.Node()))}
-		//cmd = <-led.bus.Recv
-		//led.Infof("cmd-sync: %v\n", cmd)
-		return err
-	*/
 }
 
 func NewLED(name string, bus string) *LED {
