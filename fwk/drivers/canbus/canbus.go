@@ -356,8 +356,6 @@ func (bus *busImpl) Close() error {
 func (bus *busImpl) run() {
 	bus.Infof("handle...\n")
 	const bufsz = 1024
-	buf := make([]byte, bufsz)
-
 	defer bus.conn.Close()
 
 loop:
@@ -376,7 +374,8 @@ loop:
 			}
 
 			// TODO(sbinet) only read back when needed?
-			buf = buf[:bufsz]
+			// TODO(sbinet) implement a goroutine-safe buffer?
+			buf := make([]byte, bufsz)
 			n, err = bus.conn.Read(buf)
 			if err != nil {
 				bus.Errorf("error receiving message: %v\n", err)
