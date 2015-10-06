@@ -39,6 +39,12 @@ func (app *App) AddModule(m Module) {
 func (app *App) Run() error {
 	var err error
 
+	err = System.init()
+	if err != nil {
+		app.Errorf("error booting system: %v\n", err)
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(app.ctx)
 	defer cancel()
 
@@ -152,6 +158,39 @@ func (app *App) doSys(ctx context.Context, f modFunc) error {
 }
 
 func (app *App) sysBoot(ctx context.Context) error {
+	go func() {
+		for {
+			app.Infof("--- sys-bus loop ---\n")
+			select {
+			case <-ctx.Done():
+				app.Infof("shutting down sys-bus...\n")
+				return
+
+			default:
+				msg, err := System.sock.Recv()
+				if err != nil {
+					app.Errorf("error receiving from sys-bus: %v\n", err)
+					continue
+				}
+				app.Infof("recv: %v\n", string(msg))
+			}
+		}
+	}()
+
+	for _, m := range app.modules {
+		o, ok := m.(interface {
+			InitBus() error
+		})
+		if !ok {
+			continue
+		}
+		err := o.InitBus()
+		if err != nil {
+			app.Errorf("error initializing bus for [%s]!\n", m.Name())
+			continue
+		}
+	}
+
 	return app.doSys(ctx, modFunc(Module.Boot))
 }
 

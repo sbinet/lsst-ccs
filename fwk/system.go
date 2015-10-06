@@ -2,6 +2,16 @@ package fwk
 
 import (
 	"fmt"
+
+	"github.com/gdamore/mangos"
+	"github.com/gdamore/mangos/protocol/bus"
+	"github.com/gdamore/mangos/transport/ipc"
+	"github.com/gdamore/mangos/transport/tcp"
+)
+
+const (
+	// BusAddr is the default rendez-vous point for the system bus
+	BusAddr = "tcp://127.0.0.1:40000"
 )
 
 var System = systemType{
@@ -14,6 +24,8 @@ type systemType struct {
 	name    string
 	devices []Device
 	devmap  map[string]Device
+
+	sock mangos.Socket
 }
 
 func (sys *systemType) Devices() []Device {
@@ -22,6 +34,23 @@ func (sys *systemType) Devices() []Device {
 
 func (sys *systemType) Name() string {
 	return sys.name
+}
+
+func (sys *systemType) init() error {
+	sock, err := bus.NewSocket()
+	if err != nil {
+		return err
+	}
+	sys.sock = sock
+	sys.sock.AddTransport(ipc.NewTransport())
+	sys.sock.AddTransport(tcp.NewTransport())
+
+	err = sys.sock.Listen(BusAddr)
+	if err != nil {
+		return err
+	}
+
+	return err
 }
 
 func (sys *systemType) Register(dev Device) {

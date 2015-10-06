@@ -30,8 +30,7 @@ type Device struct {
 }
 
 func (dev *Device) Boot(ctx context.Context) error {
-	dev.Infof(">>> boot...\n")
-	return nil
+	return dev.Base.Boot(ctx)
 }
 
 func (dev *Device) Start(ctx context.Context) error {
@@ -59,6 +58,12 @@ func (dev *Device) Tick(ctx context.Context) error {
 		return err
 	}
 	dev.Debugf("temperature=%v C\n", temp)
+
+	err = dev.Send([]byte(fmt.Sprintf("temp=%v C", temp)))
+	if err != nil {
+		dev.Errorf("error sending temperature: %v\n", err)
+		return err
+	}
 
 	hygro, err := dev.Hygrometry()
 	if err != nil {
