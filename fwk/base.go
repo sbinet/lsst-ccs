@@ -39,7 +39,7 @@ func (b *Base) Boot(ctx context.Context) error {
 	b.bus.AddTransport(ipc.NewTransport())
 	b.bus.AddTransport(tcp.NewTransport())
 
-	err = b.bus.Listen("tcp://127.0.0.1:0")
+	err = b.bus.Listen("ipc://127.0.0.1:0")
 	if err != nil {
 		return err
 	}
@@ -64,6 +64,6 @@ func (b *Base) Shutdown(ctx context.Context) error {
 
 // Send sends data on the system bus
 func (b *Base) Send(data []byte) error {
-	msg := append([]byte(b.Name()), data...)
+	msg := append([]byte("name="+b.Name()+";"), data...)
 	return b.bus.Send(msg)
 }
