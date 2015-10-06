@@ -58,12 +58,6 @@ func (dev *Device) Tick(ctx context.Context) error {
 	}
 	dev.Debugf("temperature=%v C\n", temp)
 
-	err = dev.Send([]byte(fmt.Sprintf("temp=%v C", temp)))
-	if err != nil {
-		dev.Errorf("error sending temperature: %v\n", err)
-		return err
-	}
-
 	hygro, err := dev.Hygrometry()
 	if err != nil {
 		dev.Errorf("error reading hygrometry: %v\n", err)
@@ -77,6 +71,18 @@ func (dev *Device) Tick(ctx context.Context) error {
 		return err
 	}
 	dev.Debugf("press=%v mbar\n", press)
+
+	err = dev.Send([]byte(fmt.Sprintf(
+		"hygro=%v%%; press=%vmbar; temp=%vC",
+		hygro,
+		press,
+		temp,
+	)))
+	if err != nil {
+		dev.Errorf("error sending sensor data: %v\n", err)
+		return err
+	}
+
 	return err
 }
 

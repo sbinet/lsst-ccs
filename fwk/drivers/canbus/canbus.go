@@ -136,6 +136,13 @@ func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) fwk.M
 func (bus *busImpl) Boot(ctx context.Context) error {
 	bus.Infof(">>> boot...\n")
 	var err error
+
+	err = bus.Base.Boot(ctx)
+	if err != nil {
+		bus.Errorf("error booting: %v\n", err)
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
