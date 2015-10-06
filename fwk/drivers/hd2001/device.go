@@ -44,8 +44,7 @@ func (dev *Device) Stop(ctx context.Context) error {
 }
 
 func (dev *Device) Shutdown(ctx context.Context) error {
-	var err error
-	return err
+	return dev.Base.Shutdown(ctx)
 }
 
 func (dev *Device) Tick(ctx context.Context) error {

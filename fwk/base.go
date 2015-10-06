@@ -52,6 +52,16 @@ func (b *Base) Boot(ctx context.Context) error {
 	return err
 }
 
+func (b *Base) Shutdown(ctx context.Context) error {
+	err := b.bus.Close()
+	if err != nil {
+		b.Errorf("error closing connection to system-bus: %v\n", err)
+		return err
+	}
+
+	return err
+}
+
 // Send sends data on the system bus
 func (b *Base) Send(data []byte) error {
 	msg := append([]byte(b.Name()), data...)
