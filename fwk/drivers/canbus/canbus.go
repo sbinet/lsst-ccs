@@ -4,11 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net"
-	"os"
-	"os/exec"
 	"sync"
-	"syscall"
 
 	"golang.org/x/net/context"
 
@@ -96,9 +92,7 @@ type Bus interface {
 
 type busImpl struct {
 	*fwk.Base
-	port  int
-	l     net.Listener
-	conn  net.Conn
+	conn  *cwrapper
 	quit  chan struct{}
 	nodes []int
 
@@ -115,8 +109,10 @@ type busImpl struct {
 func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) fwk.Module {
 	devs := append([]fwk.Device{adc, dac}, devices...)
 	bus := &busImpl{
-		Base:    fwk.NewBase(name),
-		port:    port,
+		Base: fwk.NewBase(name),
+		conn: &cwrapper{
+			port: port,
+		},
 		quit:    make(chan struct{}),
 		nodes:   make([]int, 0, 2),
 		adc:     adc,
@@ -187,22 +183,10 @@ func (bus *busImpl) Shutdown(ctx context.Context) error {
 
 func (bus *busImpl) init() error {
 	var err error
-	if true {
-		errc := make(chan error)
-		go bus.startCWrapper(errc)
-	}
 
-	bus.Infof("... starting tcp server ...\n")
-	bus.l, err = net.Listen("tcp", fmt.Sprintf(":%d", bus.port))
+	err = bus.conn.init(bus.Base.Logger)
 	if err != nil {
-		bus.Errorf("error starting tcp server: %v\n", err)
-		return err
-	}
-
-	bus.Infof("... waiting for a connection ...\n")
-	bus.conn, err = bus.l.Accept()
-	if err != nil {
-		bus.Errorf("error accepting connection: %v\n", err)
+		bus.Errorf("error initializing cwrapper: %v\n", err)
 		return err
 	}
 
@@ -343,14 +327,14 @@ func (bus *busImpl) init() error {
 }
 
 func (bus *busImpl) Close() error {
-	if bus.l == nil {
+	if bus.conn == nil {
 		return nil
 	}
 	bus.Infof("closing tcp connection...\n")
 	close(bus.quit)
 
 	bus.Infof("closing tcp server\n")
-	return bus.l.Close()
+	return bus.conn.Close()
 }
 
 func (bus *busImpl) run() {
@@ -379,7 +363,7 @@ loop:
 			n, err = bus.conn.Read(buf)
 			if err != nil {
 				bus.Errorf("error receiving message: %v\n", err)
-				return
+				break loop
 			}
 			buf = buf[:n]
 			cmd = newCommand(buf)
@@ -450,65 +434,3 @@ func (bus *busImpl) DAC() *DAC {
 var (
 	sepComma = []byte(",")
 )
-
-func (bus *busImpl) startCWrapper(errc chan error) {
-	host, err := bus.host()
-	if err != nil {
-		errc <- err
-		return
-	}
-
-	bus.Infof("Starting c-wrapper on PC-104... (listen for %s:%d)\n", host, bus.port)
-
-	cmd := exec.Command(
-		"ssh",
-		"-X",
-		"root@clrlsstemb01.in2p3.fr",
-		"startCWrapper --host="+host, fmt.Sprintf("--port=%d", bus.port),
-	)
-	cmd.Env = append(cmd.Env, "TERM=vt100")
-	//cmd.Stdin = os.Stdin
-	//cmd.Stdout = os.Stderr
-	//cmd.Stderr = os.Stderr
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	/*
-		atexit(func() {
-			killProc(cmd)
-		})
-	*/
-
-	bus.Infof("c-wrapper command: %v\n", cmd.Args)
-
-	err = cmd.Run()
-	if err != nil {
-		bus.Errorf("c-wrapper= %v\n", err)
-		errc <- err
-		return
-	}
-}
-
-func (bus *busImpl) host() (string, error) {
-	host, err := os.Hostname()
-	if err != nil {
-		bus.Errorf("could not retrieve hostname: %v\n", err)
-		return "", err
-	}
-
-	addrs, err := net.LookupIP(host)
-	if err != nil {
-		bus.Errorf("could not lookup hostname IP: %v\n", err)
-		return "", err
-	}
-
-	for _, addr := range addrs {
-		ipv4 := addr.To4()
-		if ipv4 == nil {
-			continue
-		}
-		return ipv4.String(), nil
-	}
-
-	bus.Errorf("could not infer host IP")
-	return "", fmt.Errorf("could not infer host IP")
-}
