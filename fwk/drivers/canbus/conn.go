@@ -2,6 +2,7 @@ package canbus
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -10,19 +11,41 @@ import (
 	"github.com/gonuts/logger"
 )
 
-// cwrapper manages the connection to the C-Wrapper program
-type cwrapper struct {
+type cwrapper interface {
+	io.Reader
+	io.Writer
+	io.Closer
+	init(msg *logger.Logger) error
+}
+
+// cwrapperImpl manages the connection to the C-Wrapper program
+type cwrapperImpl struct {
 	port int
 	lst  net.Listener
 	conn net.Conn
+	proc *exec.Cmd
+
+	quit chan struct{}
+	errc chan error
 }
 
-func (c *cwrapper) init(msg *logger.Logger) error {
+func newCwrapperImpl(port int) *cwrapperImpl {
+	return &cwrapperImpl{
+		port: port,
+		quit: make(chan struct{}),
+		errc: make(chan error),
+	}
+}
+
+func (c *cwrapperImpl) init(msg *logger.Logger) error {
 	var err error
 
 	if true {
-		errc := make(chan error)
-		go c.startCWrapper(msg, errc)
+		go c.startCWrapper(msg)
+	} else {
+		go func() {
+			c.quit <- struct{}{}
+		}()
 	}
 
 	msg.Infof("... starting tcp server ...\n")
@@ -42,40 +65,31 @@ func (c *cwrapper) init(msg *logger.Logger) error {
 	return err
 }
 
-func (c *cwrapper) Read(data []byte) (int, error) {
+func (c *cwrapperImpl) Read(data []byte) (int, error) {
+	if c.conn == nil {
+		return 0, io.EOF
+	}
 	return c.conn.Read(data)
 }
 
-func (c *cwrapper) Write(data []byte) (int, error) {
+func (c *cwrapperImpl) Write(data []byte) (int, error) {
+	if c.conn == nil {
+		return 0, io.EOF
+	}
 	return c.conn.Write(data)
 }
 
-func (c *cwrapper) Close() error {
+func (c *cwrapperImpl) Close() error {
 	var err error
-	if c.conn != nil {
-		errConn := c.conn.Close()
-		if errConn != nil {
-			err = errConn
-		}
-
-	}
-
-	if c.lst != nil {
-		errLst := c.lst.Close()
-		if errLst != nil {
-			err = errLst
-		}
-	}
-
-	c.lst = nil
-	c.conn = nil
+	c.quit <- struct{}{}
+	err = <-c.errc
 	return err
 }
 
-func (c *cwrapper) startCWrapper(msg *logger.Logger, errc chan error) {
+func (c *cwrapperImpl) startCWrapper(msg *logger.Logger) {
 	host, err := c.host(msg)
 	if err != nil {
-		errc <- err
+		c.errc <- err
 		return
 	}
 
@@ -94,23 +108,23 @@ func (c *cwrapper) startCWrapper(msg *logger.Logger, errc chan error) {
 	//cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	/*
-		atexit(func() {
-			killProc(cmd)
-		})
-	*/
-
 	msg.Infof("c-wrapper command: %v\n", cmd.Args)
 
-	err = cmd.Run()
+	c.proc = cmd
+	err = c.proc.Start()
 	if err != nil {
-		msg.Errorf("c-wrapper= %v\n", err)
-		errc <- err
+		msg.Errorf("error starting c-wrapper: %v\n", err)
+		c.errc <- err
 		return
+	}
+
+	select {
+	case <-c.quit:
+		c.errc <- c.proc.Process.Kill()
 	}
 }
 
-func (c *cwrapper) host(msg *logger.Logger) (string, error) {
+func (c *cwrapperImpl) host(msg *logger.Logger) (string, error) {
 	host, err := os.Hostname()
 	if err != nil {
 		msg.Errorf("could not retrieve hostname: %v\n", err)

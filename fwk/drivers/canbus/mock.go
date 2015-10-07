@@ -3,110 +3,101 @@ package canbus
 import (
 	"bytes"
 	"fmt"
+	"io"
 
+	"github.com/gonuts/logger"
 	"github.com/sbinet/lsst-ccs/fwk"
-	"golang.org/x/net/context"
 )
 
-// mockBus is canbus mock
-type mockBus struct {
-	*fwk.Base
-	port  int
-	nodes []int
-
-	adc *ADC
-	dac *DAC
-
-	devices []fwk.Device
-}
-
 func NewMock(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) fwk.Module {
-	devs := append([]fwk.Device{adc, dac}, devices...)
-	bus := &mockBus{
-		Base:    fwk.NewBase(name),
-		port:    port,
-		adc:     adc,
-		dac:     dac,
-		devices: devs,
-	}
-	fwk.System.Register(bus)
-	for _, dev := range bus.devices {
-		fwk.System.Register(dev)
-	}
-
+	bus := New(name, port, adc, dac, devices...)
+	bus.(*busImpl).conn = newCwrapperMock()
 	return bus
 }
 
-func (bus *mockBus) Boot(ctx context.Context) error {
+type cwrapperMock struct {
+	quit chan struct{}
+	conn chan []byte
+}
+
+func newCwrapperMock() *cwrapperMock {
+	return &cwrapperMock{
+		quit: make(chan struct{}),
+		conn: make(chan []byte),
+	}
+}
+
+func (c *cwrapperMock) init(msg *logger.Logger) error {
 	var err error
-	// adc is 0x41
-	bus.adc.node = 0x41
-	bus.adc.bus = bus
+	go c.run()
+	return err
+}
 
-	// dac is 0x??
-	bus.dac.node = 0x42
-	bus.dac.bus = bus
-
-	bus.Infof("adc=%#v\n", bus.adc)
-	bus.Infof("dac=%#v\n", bus.dac)
-
-	err = bus.adc.init()
-	if err != nil {
-		bus.Errorf("error initializing ADC: %v\n", err)
-		return err
+func (c *cwrapperMock) run() {
+	c.conn <- []byte("TestBench ISO-8859-1\n")
+	for _, node := range []int{0x41, 0x42} {
+		c.conn <- Command{
+			Name: Boot,
+			Data: []byte(fmt.Sprintf("%x", node)),
+		}.bytes()
 	}
 
-	err = bus.dac.init()
-	if err != nil {
-		bus.Errorf("error initializing DAC: %v\n", err)
-		return err
+	type Node struct {
+		id       int
+		device   int
+		vendor   int
+		product  int
+		revision int
+		serial   string
 	}
 
-	//go bus.run()
-
-	return err
-}
-
-func (bus *mockBus) Start(ctx context.Context) error {
-	var err error
-	return err
-}
-
-func (bus *mockBus) Stop(ctx context.Context) error {
-	var err error
-	return err
-}
-
-func (bus *mockBus) Shutdown(ctx context.Context) error {
-	var err error
-	bus.Infof("shutdown...\n")
-
-	_, err = bus.Send(Command{Quit, nil})
-	if err != nil {
-		bus.Errorf("error closing canbus: %v\n", err)
-		return err
+	for _, node := range []Node{
+		{
+			id:     0x41,
+			device: 262545, vendor: 23, product: 587333634, revision: 65538,
+			serial: "c7c80499",
+		},
+		{
+			id:     0x42,
+			device: 524689, vendor: 23, product: 587464706, revision: 1,
+			serial: "c7c60327",
+		},
+	} {
+		c.conn <- Command{
+			Name: Info,
+			Data: []byte(fmt.Sprintf(
+				"%x,%x,%x,%x,%x,%s",
+				node.id,
+				node.device,
+				node.vendor,
+				node.product,
+				node.revision,
+				node.serial,
+			)),
+		}.bytes()
 	}
-
-	return err
 }
 
-func (bus *mockBus) ADC() *ADC {
-	return bus.adc
+func (c *cwrapperMock) Read(data []byte) (int, error) {
+	buf := <-c.conn
+	n := len(buf)
+	if n > len(data) {
+		n = len(data)
+	}
+	copy(data[:n], buf[:n])
+	return n, nil
 }
 
-func (bus *mockBus) DAC() *DAC {
-	return bus.dac
-}
-
-func (bus *mockBus) Send(icmd Command) (Command, error) {
-	bus.Debugf("request: %v\n", icmd)
-	var ocmd Command
+func (c *cwrapperMock) Write(data []byte) (int, error) {
 	var err error
-
+	ocmd := Command{}
+	icmd := newCommand(data)
 	switch icmd.Name {
+	case Boot:
+	case Info:
+		return 0, nil
 	case Quit:
-		return icmd, err
-
+		return 0, io.EOF
 	case Rsdo:
 		var node int
 		var idx int
@@ -118,9 +109,9 @@ func (bus *mockBus) Send(icmd Command) (Command, error) {
 			&sub,
 		)
 		if err != nil {
-			return ocmd, err
+			return -1, err
 		}
-		return Command{
+		ocmd = Command{
 			Name: Rsdo,
 			Data: []byte(fmt.Sprintf(
 				"%x,%x,%x",
@@ -128,7 +119,7 @@ func (bus *mockBus) Send(icmd Command) (Command, error) {
 				0,
 				(2<<14)/2,
 			)),
-		}, err
+		}
 
 	case Wsdo:
 		var node int
@@ -139,18 +130,27 @@ func (bus *mockBus) Send(icmd Command) (Command, error) {
 			&idx,
 		)
 		if err != nil {
-			return ocmd, err
+			return -1, err
 		}
 
-		return Command{
+		ocmd = Command{
 			Name: Wsdo,
 			Data: []byte(fmt.Sprintf(
 				"%x,%x",
 				node,
 				0,
 			)),
-		}, err
+		}
 	}
+	go func() {
+		c.conn <- ocmd.bytes()
+	}()
+	return len(ocmd.bytes()), nil
+}
 
-	return ocmd, err
+func (c *cwrapperMock) Close() error {
+	go func() {
+		c.quit <- struct{}{}
+	}()
+	return nil
 }

@@ -92,7 +92,7 @@ type Bus interface {
 
 type busImpl struct {
 	*fwk.Base
-	conn  *cwrapper
+	conn  cwrapper
 	quit  chan struct{}
 	nodes []int
 
@@ -109,10 +109,8 @@ type busImpl struct {
 func New(name string, port int, adc *ADC, dac *DAC, devices ...fwk.Device) fwk.Module {
 	devs := append([]fwk.Device{adc, dac}, devices...)
 	bus := &busImpl{
-		Base: fwk.NewBase(name),
-		conn: &cwrapper{
-			port: port,
-		},
+		Base:    fwk.NewBase(name),
+		conn:    newCwrapperImpl(port),
 		quit:    make(chan struct{}),
 		nodes:   make([]int, 0, 2),
 		adc:     adc,
@@ -287,7 +285,7 @@ func (bus *busImpl) init() error {
 				bus.Errorf("error decoding %v: %v\n", cmd, err)
 				return err
 			}
-			bus.Infof("node=%v\n", node)
+			bus.Infof("node=%#v\n", node)
 			nodes = append(nodes, node)
 			//TODO(sbinet): better/more-general handling
 			switch node.serial {
@@ -330,17 +328,19 @@ func (bus *busImpl) Close() error {
 	if bus.conn == nil {
 		return nil
 	}
-	bus.Infof("closing tcp connection...\n")
-	close(bus.quit)
-
 	bus.Infof("closing tcp server\n")
 	return bus.conn.Close()
 }
 
 func (bus *busImpl) run() {
 	bus.Infof("handle...\n")
+
 	const bufsz = 1024
-	defer bus.conn.Close()
+	pool := sync.Pool{
+		New: func() interface{} {
+			return make([]byte, bufsz)
+		},
+	}
 
 loop:
 	for {
@@ -354,12 +354,13 @@ loop:
 
 			switch cmd.Name {
 			case Quit:
+				bus.Infof("received 'quit' request...\n")
 				break loop
 			}
 
 			// TODO(sbinet) only read back when needed?
-			// TODO(sbinet) implement a goroutine-safe buffer?
-			buf := make([]byte, bufsz)
+			buf := pool.Get().([]byte)
+			buf = buf[:bufsz]
 			n, err = bus.conn.Read(buf)
 			if err != nil {
 				bus.Errorf("error receiving message: %v\n", err)
@@ -368,6 +369,7 @@ loop:
 			buf = buf[:n]
 			cmd = newCommand(buf)
 			bus.recv <- cmd
+			pool.Put(buf)
 
 		case <-bus.quit:
 			bus.Infof("quit...\n")
@@ -377,6 +379,7 @@ loop:
 
 	close(bus.send)
 	close(bus.recv)
+	bus.Infof("handle... [done]\n")
 }
 
 // Send sends a command down the bus and returns its reply
@@ -389,7 +392,8 @@ func (bus *busImpl) Send(icmd Command) (Command, error) {
 	bus.send <- icmd
 	switch icmd.Name {
 	case Quit:
-		return icmd, err
+		ocmd := <-bus.recv
+		return ocmd, err
 	}
 	ocmd := <-bus.recv
 
