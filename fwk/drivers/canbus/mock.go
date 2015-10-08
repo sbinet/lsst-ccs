@@ -117,7 +117,7 @@ func (c *cwrapperMock) Write(data []byte) (int, error) {
 				"%x,%x,%x",
 				node,
 				0,
-				(2<<14)/2,
+				sub*5000,
 			)),
 		}
 
