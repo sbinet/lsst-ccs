@@ -64,6 +64,6 @@ func (b *Base) Shutdown(ctx context.Context) error {
 
 // Send sends data on the system bus
 func (b *Base) Send(data []byte) error {
-	msg := append([]byte("name="+b.Name()+";"), data...)
+	msg := append([]byte("name="+b.Name()+"; "), data...)
 	return b.bus.Send(msg)
 }
