@@ -133,15 +133,16 @@ func (dev *Device) readVolts(name string, id uint8) (float64, error) {
 	const nretries = 3
 	for i := 0; i < nretries; i++ {
 		var err error
-		cmd, err := dev.bus.Send(canbus.Command{
-			Name: canbus.Rsdo,
-			Data: []byte(fmt.Sprintf("%x,%x,%x", dev.adc.Node(), 0x6401, id)),
-		})
+		msg := canbus.Msg(
+			canbus.Rsdo,
+			[]byte(fmt.Sprintf("%x,%x,%x", dev.adc.Node(), 0x6401, id)),
+		)
+		dev.bus.Queue() <- msg
+		cmd := <-msg.Reply
+		err = cmd.Err()
 		if err != nil {
+			dev.Errorf("error sending rsdo command: %v\n", err)
 			return 0, err
-		}
-		if cmd.Err() != nil {
-			return 0, cmd.Err()
 		}
 
 		volts := 0.0
@@ -155,6 +156,7 @@ func (dev *Device) readVolts(name string, id uint8) (float64, error) {
 				dev.Debugf("got invalid command: %v\n", cmd)
 				continue
 			}
+			dev.Infof(">> %-20s cmd.Data=%q\n", name, string(cmd.Data))
 			_, err = fmt.Fscanf(
 				bytes.NewReader(cmd.Data),
 				"%x,%x,%x",
@@ -163,8 +165,16 @@ func (dev *Device) readVolts(name string, id uint8) (float64, error) {
 				&adc,
 			)
 			if err != nil {
-				dev.Errorf("error decoding %s: %v (cmd=%v)\n", name, err, cmd)
+				dev.Errorf(
+					"error decoding %s: %v (cmd.Data=%q)\n",
+					name, err, string(cmd.Data),
+				)
 				return 0, err
+			} else {
+				dev.Infof("<< %-20s cmd.Data=%q\n",
+					name,
+					string(cmd.Data),
+				)
 			}
 			if ecode != 0 {
 				dev.Errorf("canbus error: %v\n", ecode)

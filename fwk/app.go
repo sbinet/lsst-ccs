@@ -90,6 +90,7 @@ loop:
 		select {
 
 		case <-tick.C:
+			app.Infof("========================== tick\n")
 			app.Debugf("tick...\n")
 			err = app.sysTick(ctx)
 			if err != nil {
