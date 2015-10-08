@@ -336,11 +336,6 @@ func (bus *busImpl) run() {
 	bus.Infof("handle...\n")
 
 	const bufsz = 1024
-	pool := sync.Pool{
-		New: func() interface{} {
-			return make([]byte, bufsz)
-		},
-	}
 
 loop:
 	for {
@@ -359,8 +354,7 @@ loop:
 			}
 
 			// TODO(sbinet) only read back when needed?
-			buf := pool.Get().([]byte)
-			buf = buf[:bufsz]
+			buf := make([]byte, bufsz)
 			n, err = bus.conn.Read(buf)
 			if err != nil {
 				bus.Errorf("error receiving message: %v\n", err)
@@ -369,7 +363,6 @@ loop:
 			buf = buf[:n]
 			cmd = newCommand(buf)
 			bus.recv <- cmd
-			pool.Put(buf)
 
 		case <-bus.quit:
 			bus.Infof("quit...\n")
