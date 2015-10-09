@@ -25,6 +25,7 @@ RUN pacman -S --noconfirm \
 	sed \
 	subversion \
 	which \
+	xorg-server xorg-xclock libxtst \
 	;
 
 ## create lsst user
