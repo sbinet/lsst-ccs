@@ -99,11 +99,25 @@ func cmdDist(cmdr *commander.Command, args []string) error {
 		return err
 	}
 
-	// FIXME(sbinet) extract/infer correct connector version
+	mysqlConnectorMatches, err := filepath.Glob(
+		filepath.Join(
+			dist,
+			repos[1].Name+"-main-"+repos[1].Version,
+			"share", "java",
+			"mysql-connector-java-*",
+		),
+	)
+	if err != nil {
+		log.Printf("error finding a mysql-connector-java lib: %v\n",
+			err,
+		)
+		return err
+	}
+
 	mysqlConnector := filepath.Join(
 		"..", repos[1].Name+"-main-"+repos[1].Version,
 		"share", "java",
-		"mysql-connector-java-5.1.23.jar",
+		filepath.Base(mysqlConnectorMatches[0]),
 	)
 	err = os.Symlink(
 		mysqlConnector,
