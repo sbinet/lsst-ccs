@@ -99,7 +99,7 @@ func cmdDist(cmdr *commander.Command, args []string) error {
 		return err
 	}
 
-	// FIXME(sbinet) extract/infer correct name
+	// FIXME(sbinet) extract/infer correct connector version
 	mysqlConnector := filepath.Join(
 		"..", repos[1].Name+"-main-"+repos[1].Version,
 		"share", "java",
