@@ -64,17 +64,18 @@ func cmdDist(cmdr *commander.Command, args []string) error {
 	}
 
 	errc := make(chan error)
-	for _, repo := range repos {
-		rdir := filepath.Join(dir, repo)
+	for i := range repos {
+		repo := &repos[i]
+		rdir := filepath.Join(dir, repo.Name)
 		_, err = os.Stat(rdir)
 		if err != nil {
 			log.Printf("no such directory [%s] (err=%v)\n", rdir, err)
 			return err
 		}
 
-		go func(rdir string) {
-			errc <- makeDistRepo(dist, rdir)
-		}(rdir)
+		go func(rdir string, repo *Repo) {
+			errc <- makeDistRepo(dist, rdir, repo)
+		}(rdir, repo)
 	}
 
 	for range repos {
@@ -88,6 +89,30 @@ func cmdDist(cmdr *commander.Command, args []string) error {
 	err = os.MkdirAll(extdir, 0755)
 	if err != nil {
 		log.Printf("error creating [%s] directory: %v\n", extdir, err)
+		return err
+	}
+
+	drvdir := filepath.Join(dist, "drivers")
+	err = os.MkdirAll(drvdir, 0755)
+	if err != nil {
+		log.Printf("error creating [%s] directory: %v\n", drvdir, err)
+		return err
+	}
+
+	// FIXME(sbinet) extract/infer correct name
+	mysqlConnector := filepath.Join(
+		"..", repos[1].Name+"-main-"+repos[1].Version,
+		"share", "java",
+		"mysql-connector-java-5.1.23.jar",
+	)
+	err = os.Symlink(
+		mysqlConnector,
+		filepath.Join(drvdir, "mysql-connector-java.jar"),
+	)
+	if err != nil {
+		log.Printf("error creating mysql-connector symlink: %v\n",
+			err,
+		)
 		return err
 	}
 
@@ -112,7 +137,7 @@ hibernate.connection.password=%s
 			Name: filepath.Join(extdir, "ccsGlobal.properties"),
 			Data: []byte(fmt.Sprintf(
 				"org.lsst.ccs.localdb.additional.classpath.entry=%s\n",
-				"/opt/lsst/DISTRIB/drivers/mysql-connector-java-5.1.15.jar",
+				"/opt/lsst/DISTRIB/drivers/mysql-connector-java.jar",
 			)),
 		},
 	} {
@@ -126,9 +151,8 @@ hibernate.connection.password=%s
 	return err
 }
 
-func makeDistRepo(dist, rdir string) error {
-	repo := filepath.Base(rdir)
-	log.Printf("creating distribution for repo [%s]...\n", repo)
+func makeDistRepo(dist, rdir string, repo *Repo) error {
+	log.Printf("creating distribution for repo [%s]...\n", repo.Name)
 
 	pom, err := os.Open(filepath.Join(rdir, "pom.xml"))
 	if err != nil {
@@ -150,7 +174,7 @@ func makeDistRepo(dist, rdir string) error {
 
 	// log.Printf("pom-data: %#v\n", data)
 
-	f, err := os.Create("log-" + repo + ".txt")
+	f, err := os.Create("log-" + repo.Name + ".txt")
 	if err != nil {
 		return err
 	}
@@ -162,6 +186,8 @@ func makeDistRepo(dist, rdir string) error {
 		return err
 	}
 
+	repo.Version = data.Version
+
 	for _, fname := range matches {
 		//fmt.Printf(">>> %s\n", fname)
 		err = unzip(dist, fname)
@@ -170,7 +196,7 @@ func makeDistRepo(dist, rdir string) error {
 			return err
 		}
 	}
-	log.Printf("creating distribution for repo [%s]... [done]\n", repo)
+	log.Printf("creating distribution for repo [%s]... [done]\n", repo.Name)
 	return err
 }
 

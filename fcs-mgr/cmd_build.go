@@ -44,7 +44,7 @@ func cmdBuild(cmdr *commander.Command, args []string) error {
 
 	errc := make(chan error)
 	for _, repo := range repos {
-		rdir := filepath.Join(dir, repo)
+		rdir := filepath.Join(dir, repo.Name)
 		_, err = os.Stat(rdir)
 		if err != nil {
 			log.Printf("no such directory [%s] (err=%v)\n", rdir, err)

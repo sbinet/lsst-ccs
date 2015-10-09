@@ -80,7 +80,7 @@ func cmdInit(cmdr *commander.Command, args []string) error {
 			}
 
 			errc <- updateRepo(rdir)
-		}(repo)
+		}(repo.Name)
 	}
 
 	for range repos {

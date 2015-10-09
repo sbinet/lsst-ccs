@@ -20,7 +20,8 @@ import (
 )
 
 var (
-	haddr = flag.String("addr", "", "<ip>[:<port>] PC-104 will listen to")
+	haddr    = flag.String("addr", "", "<ip>[:<port>] PC-104 will listen to")
+	cwrapper = flag.Bool("cwrapper", false, "start c-wrapper")
 
 	host = ""
 	port = 50000
@@ -285,9 +286,13 @@ func setupEnv() {
 
 func dispatch(errc chan error) {
 	switch flag.Arg(0) {
-	case "start-localdb", "jas3":
+	case "start-localdb", "jas3", "list", "infos", "shell":
 		// ok
 	default:
+		*cwrapper = true
+	}
+
+	if *cwrapper {
 		go startCWrapper(errc)
 	}
 

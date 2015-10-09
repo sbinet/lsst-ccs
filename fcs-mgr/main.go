@@ -13,10 +13,15 @@ const (
 	svnRoot = "svn+ssh://svn.lsstcorp.org/camera/CameraControl"
 )
 
+type Repo struct {
+	Name    string
+	Version string
+}
+
 var (
-	repos = []string{
-		"org-lsst-ccs-subsystem-fcs",
-		"org-lsst-ccs-localdb",
+	repos = []Repo{
+		{Name: "org-lsst-ccs-subsystem-fcs"},
+		{Name: "org-lsst-ccs-localdb"},
 	}
 
 	app *commander.Command

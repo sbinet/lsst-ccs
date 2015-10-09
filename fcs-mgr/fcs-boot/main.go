@@ -45,6 +45,8 @@ func main() {
 		"--user=" + usr.Uid + ":" + usr.Gid,
 		"--net=host",
 		"-v", *lsst + ":/opt/lsst",
+		"-e", "DISPLAY=" + os.Getenv("DISPLAY"),
+		"-v", "/tmp/.X11-unix:/tmp/.X11-unix",
 	}
 
 	if *mysql {
@@ -85,6 +87,9 @@ func main() {
 		subcmd = append(subcmd, flag.Args()...)
 	}
 
+	enableX11()
+	defer disableX11()
+
 	cmd := exec.Command("docker", subcmd...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -92,6 +97,29 @@ func main() {
 
 	err = cmd.Run()
 	if err != nil {
+		disableX11()
 		log.Fatalf("error running docker: %v\n", err)
 	}
+}
+
+func enableX11() {
+	err := runCmd("xhost", "+")
+	if err != nil {
+		log.Fatalf("error enabling X11-xhost: %v\n", err)
+	}
+}
+
+func disableX11() {
+	err := runCmd("xhost", "-")
+	if err != nil {
+		log.Fatalf("error disable X11-xhost: %v\n", err)
+	}
+}
+
+func runCmd(cmd string, args ...string) error {
+	exe := exec.Command(cmd, args...)
+	exe.Stdin = os.Stdin
+	exe.Stdout = os.Stdout
+	exe.Stderr = os.Stderr
+	return exe.Run()
 }
