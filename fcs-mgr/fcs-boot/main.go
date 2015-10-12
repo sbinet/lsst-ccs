@@ -103,14 +103,14 @@ func main() {
 }
 
 func enableX11() {
-	err := runCmd("xhost", "+")
+	err := runCmd("xhost", "+local:")
 	if err != nil {
 		log.Fatalf("error enabling X11-xhost: %v\n", err)
 	}
 }
 
 func disableX11() {
-	err := runCmd("xhost", "-")
+	err := runCmd("xhost", "-local:")
 	if err != nil {
 		log.Fatalf("error disable X11-xhost: %v\n", err)
 	}
