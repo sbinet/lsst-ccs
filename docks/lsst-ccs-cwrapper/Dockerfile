@@ -4,14 +4,16 @@ from debian
 
 maintainer binet@cern.ch
 
-env debdist jessie
-
 run apt-get update -y && \
 	apt-get install -y debootstrap
 
-run mkdir -p /build/rootfs && \
+env debdist jessie
+env rootfs  /build/rootfs
+
+run mkdir -p $rootfs && \
 	debootstrap \
 		--arch i386 \
 		$debdist \
-		http://http.debian.net/debian/${debdist}/Release
+		$rootfs \
+		http://http.debian.net/debian/
 
