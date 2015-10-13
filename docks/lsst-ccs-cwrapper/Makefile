@@ -7,7 +7,7 @@ all: build
 	@echo "done"
 
 build: build/build-img.sh
-	/bin/rm -rf ./build/rootfs
+	sudo /bin/rm -rf ./build/rootfs
 	docker run --privileged -v $(PWD)/build:/build debian /build/build-img.sh
 	docker commit $(shell docker ps -q -l) $(REPO):$(TAG)
 	genisoimage -V "$(REPO)-$(TAG)" -r -o debian-32b-$(TAG).img build/rootfs
