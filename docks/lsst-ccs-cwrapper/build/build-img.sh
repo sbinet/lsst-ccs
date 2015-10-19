@@ -13,6 +13,7 @@ mkdir -p $rootfs
 
 debootstrap \
 		--arch i386 \
+		--include=apt,git,gcc-multilib \
 		$debdist \
 		$rootfs \
 		http://http.debian.net/debian/
@@ -21,3 +22,4 @@ mount -t proc  /proc $rootfs/proc
 mount -t sysfs /sys  $rootfs/sys
 cp -f /etc/hosts     $rootfs/etc/.
 
+#chroot $rootfs /bin/sh -c 'passwd '
