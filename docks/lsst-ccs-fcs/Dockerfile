@@ -17,6 +17,7 @@ RUN pacman-key --init && \
 
 ## install fcs deps 
 RUN pacman -S --noconfirm \
+	awk \
 	bash-completion \
 	jdk8-openjdk \
 	maven \
