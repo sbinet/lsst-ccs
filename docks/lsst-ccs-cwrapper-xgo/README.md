@@ -7,7 +7,7 @@ lsst-ccs-cwrapper-xgo
 
 ```sh
 sh> docker run --rm -v `pwd`:/go lsst-ccx/cwrapper-xgo \
-	go install -compiler=gccgo -x -v github.com/go-lsst/fcs-lpc-bench
+	-x -v github.com/go-lsst/fcs-lpc-bench
 [...]
 cp $WORK/github.com/go-lsst/fcs-lpc-bench/_obj/exe/a.out /go/bin/linux_386/fcs-lpc-bench
 
