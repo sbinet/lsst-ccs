@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -26,6 +27,7 @@ ex:
 		Flag: *flag.NewFlagSet("fcs-mgr-build", flag.ExitOnError),
 	}
 	cmd.Flag.Bool("test", false, "run tests")
+	cmd.Flag.Bool("v", false, "enable verbose mode")
 	return cmd
 }
 
@@ -52,7 +54,7 @@ func cmdBuild(cmdr *commander.Command, args []string) error {
 		}
 
 		go func(rdir string) {
-			errc <- buildRepo(rdir, cmdr.Flag.Lookup("test").Value.Get().(bool))
+			errc <- buildRepo(rdir, cmdr.Flag.Lookup("test").Value.Get().(bool), cmdr.Flag.Lookup("v").Value.Get().(bool))
 		}(rdir)
 
 	}
@@ -67,7 +69,7 @@ func cmdBuild(cmdr *commander.Command, args []string) error {
 	return err
 }
 
-func buildRepo(rdir string, tests bool) error {
+func buildRepo(rdir string, tests, verbose bool) error {
 	skip := !tests
 	repo := filepath.Base(rdir)
 	log.Printf("building repo [%s]...\n", repo)
@@ -86,6 +88,10 @@ func buildRepo(rdir string, tests bool) error {
 	)
 	cmd.Stdout = f
 	cmd.Stderr = f
+	if verbose {
+		cmd.Stdout = io.MultiWriter(f, os.Stdout)
+		cmd.Stderr = io.MultiWriter(f, os.Stderr)
+	}
 
 	start := time.Now()
 	err = cmd.Run()

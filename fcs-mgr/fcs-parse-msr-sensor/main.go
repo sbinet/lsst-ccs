@@ -24,6 +24,7 @@ type Column struct {
 	TimeDelay time.Duration
 	Limits    Limits
 	CalibData CalibData
+	Data      interface{}
 }
 
 type Row struct {
@@ -128,6 +129,12 @@ func main() {
 			for i, tok := range tokens {
 				log.Printf("    module: %q\n", tok)
 				cols[i].Sensor = tok
+				switch i {
+				case 0:
+					cols[i].Data = []time.Time{}
+				default:
+					cols[i].Data = []float64{}
+				}
 			}
 
 		case NameSection:
@@ -170,6 +177,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("error parsing data: %v\nline=%q\n", err, line)
 			}
+			cols[0].Data = append(cols[0].Data.([]time.Time), row.Time)
 			row.Data = make([]float64, len(tokens)-1)
 			for i, tok := range tokens[1:] {
 				switch tok {
@@ -186,6 +194,7 @@ func main() {
 					}
 					row.Data[i] = val
 				}
+				cols[i+1].Data = append(cols[i+1].Data.([]float64), row.Data[i])
 			}
 			log.Printf("data: %v %v\n", row.Time, row.Data)
 			rows = append(rows, row)
